@@ -6,8 +6,14 @@ from . import Snowflake
 
 __all__ = (
     'TokenRetrievalMethod',
+    'RelationshipType',
     'LoginRequest',
     'LoginResponse',
+    'CreateUserPayload',
+    'CreateUserResponse',
+    'User',
+    'ClientUser',
+    'Relationship',
 )
 
 TokenRetrievalMethod: TypeAlias = Literal['new', 'revoke', 'reuse']
@@ -23,5 +29,41 @@ class LoginRequest(_LoginRequestRequired, total=False):
 
 
 class LoginResponse(TypedDict):
+    user_id: Snowflake
+    token: str
+
+
+class CreateUserPayload(TypedDict):
+    username: str
+    email: str
+    password: str
+
+
+class CreateUserResponse(TypedDict):
     id: Snowflake
     token: str
+
+
+class User(TypedDict):
+    id: Snowflake
+    username: str
+    discriminator: int
+    avatar: str | None
+    banner: str | None
+    bio: str | None
+    flags: int
+
+
+class ClientUser(User):
+    email: str | None
+    dm_privacy: int
+    group_dm_privacy: int
+    friend_request_privacy: int
+
+
+RelationshipType: TypeAlias = Literal['friend', 'outgoing_request', 'incoming_request', 'blocked']
+
+
+class Relationship(TypedDict):
+    user: User
+    type: RelationshipType

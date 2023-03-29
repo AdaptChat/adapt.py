@@ -1,7 +1,8 @@
 from typing import TypeAlias
 
-from . import user
+from . import channel, guild, user
 
 Snowflake: TypeAlias = int
+Timestamp: TypeAlias = str
 
 del TypeAlias

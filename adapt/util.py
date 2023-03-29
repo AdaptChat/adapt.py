@@ -1,13 +1,11 @@
-from base64 import b64encode
+from base64 import b64encode, urlsafe_b64decode
 from inspect import isawaitable
 from typing import (
-    Any,
     Awaitable,
     Callable,
     Optional,
     ParamSpec,
     TypeVar,
-    Union,
     overload,
 )
 
@@ -23,7 +21,7 @@ P = ParamSpec('P')
 R = TypeVar('R')
 
 
-async def maybe_coro(func: Callable[P, Awaitable[R] | R], *args: P.args, **kwargs: P.kwargs) -> Awaitable[R]:
+async def maybe_coro(func: Callable[P, Awaitable[R] | R], /, *args: P.args, **kwargs: P.kwargs) -> Awaitable[R]:
     res = func(*args, **kwargs)
     if isawaitable(res):
         return await res
@@ -70,3 +68,24 @@ def _try_int(value, /):
         return int(value)
     except (ValueError, TypeError):
         return None
+
+
+def extract_user_id_from_token(token: str, /) -> int:
+    """Extracts the user ID associated with the given authentication token.
+
+    Parameters
+    ----------
+    token: :class:`str`
+        The token to parse.
+
+    Returns
+    -------
+    :class:`int`
+        The snowflake ID of the associated user.
+
+    Raises
+    ------
+    ValueError
+        Received a malformed token.
+    """
+    return int(urlsafe_b64decode(token.split('.', maxsplit=1)))

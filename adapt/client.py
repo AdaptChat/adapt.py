@@ -2,18 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Generic, ParamSpec, TypeVar, TYPE_CHECKING
+from typing import Awaitable, Callable, Generic, ParamSpec, TypeVar, TYPE_CHECKING
 
 import aiohttp
 
+from .http import HTTPClient, DEFAULT_API_URL
 from .util import maybe_coro
 
 if TYPE_CHECKING:
-    from typing import Awaitable, Callable, Self, TypeAlias
+    from typing import Any, Self, TypeAlias
+
+    from .types.user import TokenRetrievalMethod
 
 P = ParamSpec('P')
 R = TypeVar('R')
 EventListener: TypeAlias = Callable[P, Awaitable[R] | R]
+
 
 class WeakEventRegistry(Generic[P, R]):
     """Receives events until the specified limit or timeout.
@@ -53,7 +57,10 @@ class WeakEventRegistry(Generic[P, R]):
             pass
 
     async def dispatch(self, event: str, *args: P.args, **kwargs: P.kwargs) -> None:
-        """Dispatches an event with the given arguments."""
+        """|coro|
+
+        Dispatches an event with the given arguments.
+        """
 
         if self._destroy and time.perf_counter() >= self._destroy:
             return self.destroy()
@@ -91,7 +98,7 @@ class EventDispatcher:
     def __init__(self) -> None:
         self._weak_listeners: list[WeakEventRegistry] = []
 
-    async def event(self, callback: EventListener[P, R]) -> EventListener[P, R]:
+    def event(self, callback: EventListener[P, R]) -> EventListener[P, R]:
         """Registers an event listener on the client. This overrides any previous listeners for that event."""
 
         event = callback.__name__
@@ -101,7 +108,7 @@ class EventDispatcher:
         setattr(self, event, callback)
         return callback
 
-    async def listen(
+    def listen(
         self,
         *events: str,
         check: Callable[P, bool | Awaitable[bool]] | None = None,
@@ -143,7 +150,19 @@ class EventDispatcher:
         return decorator
     
     async def dispatch(self, event: str, *args, **kwargs) -> None:
-        """Dispatches an event to its registered listeners."""
+        """|coro|
+
+        Dispatches an event to its registered listeners.
+
+        Parameters
+        ----------
+        event: :class:`str:
+            The event to dispatch to.
+        *args
+            Positional arguments to pass into event handlers.
+        **kwargs
+            Keyword arguments to pass into event handlers.
+        """
         coros = []
         if callback := getattr(self, 'on_' + event, None):
             assert callable(callback), f'Event listener for {event} is not callable'
@@ -154,14 +173,137 @@ class EventDispatcher:
 
 
 class Client(EventDispatcher):
-    """Represents a client that interacts with Adapt."""
+    """Represents a client that interacts with Adapt.
+
+    Attributes
+    ----------
+    loop: :class:`asyncio.AbstractEventLoop`
+        The asyncio event loop the client uses.
+    http: :class:`~.http.HTTPClient`
+        The HTTP client utilized by this client that interacts with Adapt HTTP requests.
+
+    Parameters
+    ----------
+    loop: :class:`asyncio.AbstractEventLoop`
+        The event loop the client should use. Defaults to what is returned by calling :func:`asyncio.get_event_loop`.
+    session: :class:`aiohttp.ClientSession`
+        The aiohttp client session to use for the created HTTP client. If not provided, one is created for you.
+    server_uri: :class:`str`
+        The URI of the backend server. Defaults to the official API server at `https://api.adapt.chat`.
+    token: :class:`str`
+        The token to run the client with. Leave blank to delay specification of the token.
+    """
     
     def __init__(
         self,
         *,
         loop: asyncio.AbstractEventLoop | None = None,
         session: aiohttp.ClientSession | None = None,
+        server_uri: str = DEFAULT_API_URL,
+        token: str | None = None,
     ) -> None:
         self.loop = loop or asyncio.get_event_loop()
+        self.http = HTTPClient(loop=self.loop, session=session, server_uri=server_uri, token=token)
 
+        self._prepare_client()
         super().__init__()
+
+    def _prepare_client(self) -> None:
+        pass
+
+    @classmethod
+    def from_http(cls, http: HTTPClient) -> Self:
+        """Creates a client from an HTTP client. This is used internally.
+
+        Parameters
+        ----------
+        http: :class:`~.http.HTTPClient`
+            The HTTP client to create the client object with.
+
+        Returns
+        -------
+        :class:`~.Client`
+            The created client object.
+        """
+
+        self = cls.__new__(cls)
+        self.loop = http.loop
+        self.http = http
+
+        self._prepare_client()
+        return self
+
+    @classmethod
+    async def from_login(
+        cls,
+        *,
+        email: str,
+        password: str,
+        method: TokenRetrievalMethod = 'reuse',
+        **options: Any,
+    ) -> Self:
+        """|coro|
+
+        Logs in with the specified credentials, then returns a client to interact with that account.
+
+        Parameters
+        ----------
+        email: :class:`str`
+            The email of the account.
+        password: :class:`str`
+            The password of the account.
+        method: Literal['new', 'revoke', 'reuse']
+            The method to use to retrieve the token. Defaults to `'reuse'`.
+        **options
+            Additional keyword-arguments to pass in when constructing the HTTP client
+            (i.e. `loop`, `session`, `server_uri`)
+
+        Returns
+        -------
+        :class:`~.Client`
+            The created client object.
+        """
+        http = HTTPClient(**options)
+        await http.login(email=email, password=password, method=method)
+        return cls.from_http(http)
+
+    @classmethod
+    async def create_user(cls, *, username: str, email: str, password: str, **options: Any) -> Self:
+        """|coro|
+
+        Registers a new user account, and returns a new client created to interact with that account.
+
+        Parameters
+        ----------
+        username: :class:`str`
+            The username of the new account.
+        email: :class:`str`
+            The email of the new account.
+        password: :class:`str`
+            The password of the new account.
+        **options
+            Additional keyword-arguments to pass in when constructing the HTTP client
+            (i.e. `loop`, `session`, `server_uri`)
+
+        Returns
+        -------
+        :class:`~.Client`
+            The created client object.
+        """
+        http = HTTPClient(**options)
+        await http.create_user(username=username, email=email, password=password)
+        return cls.from_http(http)
+
+    async def close(self) -> None:
+        """|coro|
+
+        Closes the client, freeing up resources the client might have used.
+        This is automatically called if you use :meth:`~.Client.run`.
+        """
+        await self.http.close()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *_: Any) -> None:
+        await self.close()
