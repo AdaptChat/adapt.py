@@ -8,7 +8,7 @@ from typing import Literal, TYPE_CHECKING
 from .util import extract_user_id_from_token
 
 if TYPE_CHECKING:
-    from typing import Any, Final, TypeAlias, Self
+    from typing import Any, Final, TypeAlias, Self, TypedDict
 
     from .types.user import TokenRetrievalMethod, LoginRequest, LoginResponse, CreateUserPayload, CreateUserResponse
 
@@ -34,7 +34,7 @@ class HTTPClient:
         self.loop = loop or asyncio.get_event_loop()
         self.session = session or aiohttp.ClientSession(**kwargs, loop=self.loop)
 
-        self.client_id: int | None = token and extract_user_id_from_token(token)
+        self.client_id: int | None = extract_user_id_from_token(token) if token is not None else None
         self.server_uri: str = server_uri.removesuffix('/')
         self._token: str | None = token
 
@@ -46,7 +46,7 @@ class HTTPClient:
     @token.setter
     def token(self, value: str | None) -> None:
         self._token = value
-        self.client_id = value and extract_user_id_from_token(value)
+        self.client_id = extract_user_id_from_token(value) if value is not None else None
 
     @token.deleter
     def token(self) -> None:
@@ -58,9 +58,9 @@ class HTTPClient:
         method: RequestMethod,
         endpoint: str,
         *,
-        headers: dict[str, Any] = None,
-        params: dict[str, Any] = None,
-        json: dict[str, Any] = None,
+        headers: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+        json: TypedDict | None = None,
     ) -> Any:
         headers = headers or {}
         if self.token is not None:

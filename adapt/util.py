@@ -20,13 +20,17 @@ T = TypeVar('T', bound='Ratelimiter')
 P = ParamSpec('P')
 R = TypeVar('R')
 
+# FIXME: Replace when Ratelimiter exist
+class Ratelimiter:
+    ...
 
-async def maybe_coro(func: Callable[P, Awaitable[R] | R], /, *args: P.args, **kwargs: P.kwargs) -> Awaitable[R]:
+
+async def maybe_coro(func: Callable[P, Awaitable[R] | R], /, *args: P.args, **kwargs: P.kwargs) -> R:
     res = func(*args, **kwargs)
     if isawaitable(res):
         return await res
 
-    return res
+    return res # type: ignore
 
 
 def _get_mimetype(data: bytes) -> str:
@@ -88,4 +92,4 @@ def extract_user_id_from_token(token: str, /) -> int:
     ValueError
         Received a malformed token.
     """
-    return int(urlsafe_b64decode(token.split('.', maxsplit=1)))
+    return int(urlsafe_b64decode(token.split('.', maxsplit=1)[0]))

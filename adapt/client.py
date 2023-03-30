@@ -133,7 +133,7 @@ class EventDispatcher:
             nonlocal limit
 
             events = events or (callback.__name__,)
-            events = [event.lower().removeprefix('on_') for event in events]
+            events = tuple(event.lower().removeprefix('on_') for event in events)
 
             if getattr(callback, '__adapt_call_once__', False):
                 if limit is not None:

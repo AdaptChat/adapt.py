@@ -10,7 +10,7 @@ from .role import Role
 from .user import ClientUser, User, Relationship
 
 E = TypeVar('E', bound=str)
-D = TypeVar('D', bound=dict[str, Any])
+D = TypeVar('D', bound=TypedDict)
 T = TypeVar('T')
 
 __all__ = (
