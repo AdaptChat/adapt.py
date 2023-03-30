@@ -19,6 +19,33 @@ R = TypeVar('R')
 EventListener: TypeAlias = Callable[P, Awaitable[R] | R]
 
 
+def once(func: EventListener[P, R]) -> EventListener[P, R]:
+    """A decorator that registers an event listener to be called only once before being destroyed.
+    This can be used within the client class.
+
+    Parameters
+    ----------
+    func: (*P.args, **P.kwargs) -> Any
+        The event listener.
+
+    Returns
+    -------
+    (*P.args, **P.kwargs) -> Any
+        The event listener that will be called only once.
+
+    Usage: ::
+
+        from adapt import Client, ReadyEvent, once
+
+        class MyClient(Client):
+            @once
+            async def on_ready(self, _event: ReadyEvent):
+                print('Ready!')
+    """
+    func.__adapt_call_once__ = True
+    return func
+
+
 class WeakEventRegistry(Generic[P, R]):
     """Receives events until the specified limit or timeout.
 
@@ -28,7 +55,6 @@ class WeakEventRegistry(Generic[P, R]):
         The predicate performed on event names.
     check: (*P.args, **P.kwargs) -> bool
         The predicate performed on the event.
-
     """
 
     def __init__(
@@ -131,8 +157,15 @@ class EventDispatcher:
         """
         def decorator(callback: EventListener[P, R]) -> EventListener[P, R]:
             nonlocal events
+            nonlocal limit
+
             events = events or (callback.__name__,)
             events = [event.lower().removeprefix('on_') for event in events]
+
+            if getattr(callback, '__adapt_call_once__', False):
+                if limit is not None:
+                    raise ValueError('Cannot use limit kwarg and @once decorator at the same time.')
+                limit = 1
 
             def event_check(event: str) -> bool:
                 return event.removeprefix('on_') in events
@@ -166,6 +199,10 @@ class EventDispatcher:
         coros = []
         if callback := getattr(self, 'on_' + event, None):
             assert callable(callback), f'Event listener for {event} is not callable'
+
+            if getattr(callback, '__adapt_call_once__', False):
+                delattr(self, 'on_' + event)
+
             coros.append(maybe_coro(callback, *args, **kwargs))
             
         coros.extend(listener.dispatch(event, *args, **kwargs) for listener in self._weak_listeners)
