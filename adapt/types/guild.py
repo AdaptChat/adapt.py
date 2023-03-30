@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TypedDict
 
 from . import Snowflake, Timestamp
+from .channel import GuildChannel
+from .role import Role
 from .user import User
 
 __all__ = (
