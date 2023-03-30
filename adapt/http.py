@@ -34,7 +34,7 @@ class HTTPClient:
         self.loop = loop or asyncio.get_event_loop()
         self.session = session or aiohttp.ClientSession(**kwargs, loop=self.loop)
 
-        self.client_id: int | None = token and extract_user_id_from_token(token)
+        self.client_id: int | None = extract_user_id_from_token(token) if token is not None else None
         self.server_uri: str = server_uri.removesuffix('/')
         self._token: str | None = token
 
