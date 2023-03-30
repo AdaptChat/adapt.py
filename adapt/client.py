@@ -155,10 +155,8 @@ class EventDispatcher:
 
         return decorator
     
-    async def dispatch(self, event: str, *args, **kwargs) -> None:
-        """|coro|
-
-        Dispatches an event to its registered listeners.
+    def dispatch(self, event: str, *args, **kwargs) -> asyncio.Task[list[Any]]:
+        """Dispatches an event to its registered listeners.
 
         Parameters
         ----------
@@ -179,7 +177,7 @@ class EventDispatcher:
             coros.append(maybe_coro(callback, *args, **kwargs))
 
         coros.extend(listener.dispatch(event, *args, **kwargs) for listener in self._weak_listeners)
-        await asyncio.gather(*coros)
+        return asyncio.ensure_future(asyncio.gather(*coros))
 
 
 class Client(EventDispatcher):
@@ -316,6 +314,10 @@ class Client(EventDispatcher):
             The token to log in with. If not provided, the token specified in the constructor is used.
         """
         self.http.token = token or self.http.token
+        if not self.http.token:
+            raise ValueError('No token provided to start the client with')
+
+        self.dispatch('start')
 
     def run(self, token: str | None = None) -> None:
         """Runs the client, logging in with the provided token and connecting to harmony. This is a blocking call.
