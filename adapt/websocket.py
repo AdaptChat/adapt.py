@@ -6,12 +6,14 @@ import json
 from aiohttp import WSMsgType
 
 if TYPE_CHECKING:
-    from typing import Any, Awaitable, Callable, TypedDict, TypeAlias, Final
+    from asyncio import Task
+    from typing import Any, Callable, TypedDict, TypeAlias, Final
+
     from aiohttp import ClientSession, ClientWebSocketResponse
 
     from .types.ws import InboundMessage
 
-    Dispatcher: TypeAlias = Callable[..., Awaitable[None]]
+    Dispatcher: TypeAlias = Callable[..., Task[list[Any]]]
 
 try:
     import msgpack
