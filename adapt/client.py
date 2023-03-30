@@ -19,33 +19,6 @@ R = TypeVar('R')
 EventListener: TypeAlias = Callable[P, Awaitable[R] | R]
 
 
-def once(func: EventListener[P, R]) -> EventListener[P, R]:
-    """A decorator that registers an event listener to be called only once before being destroyed.
-    This can be used within the client class.
-
-    Parameters
-    ----------
-    func: (*P.args, **P.kwargs) -> Any
-        The event listener.
-
-    Returns
-    -------
-    (*P.args, **P.kwargs) -> Any
-        The event listener that will be called only once.
-
-    Usage: ::
-
-        from adapt import Client, ReadyEvent, once
-
-        class MyClient(Client):
-            @once
-            async def on_ready(self, _event: ReadyEvent):
-                print('Ready!')
-    """
-    func.__adapt_call_once__ = True
-    return func
-
-
 class WeakEventRegistry(Generic[P, R]):
     """Receives events until the specified limit or timeout.
 
@@ -201,10 +174,10 @@ class EventDispatcher:
             assert callable(callback), f'Event listener for {event} is not callable'
 
             if getattr(callback, '__adapt_call_once__', False):
-                delattr(self, 'on_' + event)
+                setattr(self, 'on_' + event, None)
 
             coros.append(maybe_coro(callback, *args, **kwargs))
-            
+
         coros.extend(listener.dispatch(event, *args, **kwargs) for listener in self._weak_listeners)
         await asyncio.gather(*coros)
 
@@ -268,6 +241,7 @@ class Client(EventDispatcher):
         self.http = http
 
         self._prepare_client()
+        super(Client, self).__init__()
         return self
 
     @classmethod
@@ -331,6 +305,32 @@ class Client(EventDispatcher):
         await http.create_user(username=username, email=email, password=password)
         return cls.from_http(http)
 
+    async def start(self, token: str | None = None) -> None:
+        """|coro|
+
+        Starts the client, logging in with the provided token and connecting to harmony.
+
+        Parameters
+        ----------
+        token: :class:`str`
+            The token to log in with. If not provided, the token specified in the constructor is used.
+        """
+        self.http.token = token or self.http.token
+
+    def run(self, token: str | None = None) -> None:
+        """Runs the client, logging in with the provided token and connecting to harmony. This is a blocking call.
+
+        Parameters
+        ----------
+        token: :class:`str`
+            The token to log in with. If not provided, the token specified in the constructor is used.
+        """
+        async def runner() -> None:
+            async with self:
+                await self.start(token)
+
+        self.loop.run_until_complete(runner())
+
     async def close(self) -> None:
         """|coro|
 
@@ -344,3 +344,30 @@ class Client(EventDispatcher):
 
     async def __aexit__(self, *_: Any) -> None:
         await self.close()
+
+
+def once(func: EventListener[P, R]) -> EventListener[P, R]:
+    """A decorator that registers an event listener to be called only once before being destroyed.
+    This can be used within the client class.
+
+    Parameters
+    ----------
+    func: (*P.args, **P.kwargs) -> Any
+        The event listener.
+
+    Returns
+    -------
+    (*P.args, **P.kwargs) -> Any
+        The event listener that will be called only once.
+
+    Usage: ::
+
+        from adapt import Client, ReadyEvent, once
+
+        class MyClient(Client):
+            @once
+            async def on_ready(self, _event: ReadyEvent):
+                print('Ready!')
+    """
+    func.__adapt_call_once__ = True
+    return func

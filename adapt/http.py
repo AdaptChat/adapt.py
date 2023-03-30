@@ -20,7 +20,7 @@ RequestMethod: TypeAlias = Literal['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
 class HTTPClient:
     """Represents an HTTP client that makes requests to Adapt over HTTP."""
 
-    __slots__ = ('loop', 'session', 'client_id', 'token', 'server_uri')
+    __slots__ = ('loop', 'session', 'client_id', 'server_uri', '_token')
 
     def __init__(
         self,
@@ -35,8 +35,23 @@ class HTTPClient:
         self.session = session or aiohttp.ClientSession(**kwargs, loop=self.loop)
 
         self.client_id: int | None = token and extract_user_id_from_token(token)
-        self.token: str | None = token
         self.server_uri: str = server_uri.removesuffix('/')
+        self._token: str | None = token
+
+    @property
+    def token(self) -> str | None:
+        """The token used to authenticate requests."""
+        return self._token
+
+    @token.setter
+    def token(self, value: str | None) -> None:
+        self._token = value
+        self.client_id = value and extract_user_id_from_token(value)
+
+    @token.deleter
+    def token(self) -> None:
+        self._token = None
+        self.client_id = None
 
     async def request(
         self,
