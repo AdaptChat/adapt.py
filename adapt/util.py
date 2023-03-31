@@ -1,26 +1,38 @@
+from __future__ import annotations
+
 from base64 import b64encode, urlsafe_b64decode
+from datetime import datetime
 from inspect import isawaitable
 from typing import (
     Awaitable,
     Callable,
+    Final,
     Optional,
     ParamSpec,
     TypeVar,
+    TYPE_CHECKING,
     overload,
 )
+
+if TYPE_CHECKING:
+    from .models.enums import ModelType
 
 __all__ = (
     'maybe_coro',
     '_try_int',
     '_get_mimetype',
     '_bytes_to_image_data',
+    'extract_user_id_from_token',
 )
 
 T = TypeVar('T', bound='Ratelimiter')
 P = ParamSpec('P')
 R = TypeVar('R')
 
-# FIXME: Replace when Ratelimiter exist
+ADAPT_EPOCH_MILLIS: Final[int] = 1_671_926_400_000
+
+
+# FIXME: Replace when Ratelimiter exists
 class Ratelimiter:
     ...
 
@@ -30,7 +42,7 @@ async def maybe_coro(func: Callable[P, Awaitable[R] | R], /, *args: P.args, **kw
     if isawaitable(res):
         return await res
 
-    return res # type: ignore
+    return res  # type: ignore
 
 
 def _get_mimetype(data: bytes) -> str:
@@ -93,3 +105,35 @@ def extract_user_id_from_token(token: str, /) -> int:
         Received a malformed token.
     """
     return int(urlsafe_b64decode(token.split('.', maxsplit=1)[0]))
+
+
+def snowflake_time(snowflake: int, /) -> datetime:
+    """Converts an Adapt snowflake to a datetime object.
+
+    Parameters
+    ----------
+    snowflake: :class:`int`
+        The snowflake to convert.
+
+    Returns
+    -------
+    :class:`datetime.datetime`
+        The datetime object representing the snowflake's creation time.
+    """
+    return datetime.utcfromtimestamp(((snowflake >> 18) + ADAPT_EPOCH_MILLIS) / 1000)
+
+
+def snowflake_model_type(snowflake: int, /) -> ModelType:
+    """Extracts the model type of the given Adapt snowflake.
+
+    Parameters
+    ----------
+    snowflake: :class:`int`
+        The snowflake to extract the model type from.
+
+    Returns
+    -------
+    :class:`ModelType`
+        The model type associated with the snowflake.
+    """
+    return ModelType((snowflake >> 13) & 0b11111)

@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
 import json
+from typing import TYPE_CHECKING
 
 from aiohttp import WSMsgType
 
+from .server import AdaptServer
+
 if TYPE_CHECKING:
     from asyncio import Task
-    from typing import Any, Callable, TypedDict, TypeAlias, Final
+    from typing import Any, Callable, TypedDict, TypeAlias, Final, Self
 
     from aiohttp import ClientSession, ClientWebSocketResponse
 
+    from .connection import Connection
+    from .http import HTTPClient
     from .types.ws import InboundMessage
 
     Dispatcher: TypeAlias = Callable[..., Task[list[Any]]]
@@ -22,22 +27,57 @@ except ModuleNotFoundError:
 else:
     HAS_MSGPACK = True
 
-DEFAULT_WS_URL: Final[str] = "wss://harmony.adapt.chat"
+DEFAULT_WS_URL: Final[str] = AdaptServer.production().harmony
 
 
 class AttemptReconnect(Exception):
-    ...
+    pass
+
 
 class WebSocket:
-    """The WebSocket client used to interact with Adapt Websocket server"""
+    """The WebSocket client used to interact with Adapt's websocket, harmony."""
 
-    def __init__(self, session: ClientSession, dispatch: Dispatcher, token: str, msgpack: bool = True) -> None:
+    ws: ClientWebSocketResponse
+
+    def __init__(
+        self,
+        connection: Connection,
+        *,
+        loop: asyncio.AbstractEventLoop,
+        session: ClientSession,
+        dispatch: Dispatcher,
+        token: str,
+        prefer_msgpack: bool = True,
+        ws_url: str = DEFAULT_WS_URL,
+    ) -> None:
+        self._connection = connection
+        self._loop = loop
         self._session = session
-        self.__token = token
-        self._msgpack = msgpack and HAS_MSGPACK
         self._dispatch = dispatch
-        self.ws: ClientWebSocketResponse
-    
+        self._token = token
+        self._msgpack = prefer_msgpack and HAS_MSGPACK
+        self.ws_url = ws_url
+
+    @classmethod
+    def from_http(
+        cls,
+        connection: Connection,
+        http: HTTPClient,
+        *,
+        dispatch: Dispatcher,
+        prefer_msgpack: bool = True,
+        ws_url: str = DEFAULT_WS_URL,
+    ) -> Self:
+        return cls(
+            connection,
+            loop=http.loop,
+            session=http.session,
+            dispatch=dispatch,
+            token=http.token,
+            prefer_msgpack=prefer_msgpack,
+            ws_url=ws_url,
+        )
+
     async def send(self, data: dict[Any, Any] | TypedDict) -> None:
         if self._msgpack:
             r = msgpack.packb(data)
@@ -51,28 +91,35 @@ class WebSocket:
             msg: InboundMessage = msgpack.unpackb(data)
         else:
             msg: InboundMessage = json.loads(data)
-    
+
+        assert isinstance(msg, dict) and 'event' in msg, 'Received invalid message from websocket'
+
+        event = msg['event']
+        args = ()
+        if data := msg.get('data'):
+            args = (data,)
+        self._dispatch('raw_' + event, *args)
+        self._connection.process_event(msg)
+
     async def poll(self) -> None:
         msg = await self.ws.receive()
 
         if msg.type is WSMsgType.BINARY or msg.type is WSMsgType.TEXT:
-            ...
+            await self.process_message(msg.data)
         elif msg.type is WSMsgType.ERROR:
             raise msg.data
         else:
             raise AttemptReconnect
     
     async def connect(self) -> None:
-        self.ws = await self._session.ws_connect(DEFAULT_WS_URL)
+        self.ws = await self._session.ws_connect(self.ws_url)
 
         await self.poll()
-
         await self.send({
             "op": "identify",
-            "token": self.__token,
+            "token": self._token,
             "device": "desktop"
         })
-
         await self._dispatch("connect")
     
     async def start(self) -> None:
@@ -84,8 +131,7 @@ class WebSocket:
             except AttemptReconnect:
                 await self.connect()
                 continue
-            except Exception as e:
+            except Exception:
                 if not self.ws.closed:
                     await self.ws.close()
-                
-                raise e
+                raise

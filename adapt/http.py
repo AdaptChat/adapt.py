@@ -5,6 +5,7 @@ import asyncio
 
 from typing import Literal, TYPE_CHECKING
 
+from .server import AdaptServer
 from .util import extract_user_id_from_token
 
 if TYPE_CHECKING:
@@ -12,7 +13,7 @@ if TYPE_CHECKING:
 
     from .types.user import TokenRetrievalMethod, LoginRequest, LoginResponse, CreateUserPayload, CreateUserResponse
 
-DEFAULT_API_URL: Final[str] = 'https://api.adapt.chat'
+DEFAULT_API_URL: Final[str] = AdaptServer.production().api
 
 RequestMethod: TypeAlias = Literal['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
 
@@ -20,14 +21,14 @@ RequestMethod: TypeAlias = Literal['GET', 'POST', 'PATCH', 'PUT', 'DELETE']
 class HTTPClient:
     """Represents an HTTP client that makes requests to Adapt over HTTP."""
 
-    __slots__ = ('loop', 'session', 'client_id', 'server_uri', '_token')
+    __slots__ = ('loop', 'session', 'client_id', 'server_url', '_token')
 
     def __init__(
         self,
         *,
         loop: asyncio.AbstractEventLoop | None = None,
         session: aiohttp.ClientSession | None = None,
-        server_uri: str = DEFAULT_API_URL,
+        server_url: str = DEFAULT_API_URL,
         token: str | None = None,
         **kwargs,
     ) -> None:
@@ -35,7 +36,7 @@ class HTTPClient:
         self.session = session or aiohttp.ClientSession(**kwargs, loop=self.loop)
 
         self.client_id: int | None = extract_user_id_from_token(token) if token is not None else None
-        self.server_uri: str = server_uri.removesuffix('/')
+        self.server_url: str = server_url.removesuffix('/')
         self._token: str | None = token
 
     @property
@@ -72,7 +73,7 @@ class HTTPClient:
         endpoint = '/' + endpoint.removeprefix('/')
         async with self.session.request(
             method,
-            self.server_uri + endpoint,
+            self.server_url + endpoint,
             headers=headers,
             params=params,
             json=json,

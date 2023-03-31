@@ -6,13 +6,16 @@ from typing import Awaitable, Callable, Generic, ParamSpec, TypeVar, TYPE_CHECKI
 
 import aiohttp
 
-from .http import HTTPClient, DEFAULT_API_URL
+from .connection import Connection
+from .http import HTTPClient
 from .util import maybe_coro
 
 if TYPE_CHECKING:
     from typing import Any, Self, TypeAlias
 
+    from .server import AdaptServer
     from .types.user import TokenRetrievalMethod
+    from .websocket import WebSocket
 
 P = ParamSpec('P')
 R = TypeVar('R')
@@ -189,6 +192,8 @@ class Client(EventDispatcher):
         The asyncio event loop the client uses.
     http: :class:`~.http.HTTPClient`
         The HTTP client utilized by this client that interacts with Adapt HTTP requests.
+    ws: :class:`~.ws.WebSocket`
+        The websocket client utilized by this client that interacts with Adapt websocket events.
 
     Parameters
     ----------
@@ -196,37 +201,63 @@ class Client(EventDispatcher):
         The event loop the client should use. Defaults to what is returned by calling :func:`asyncio.get_event_loop`.
     session: :class:`aiohttp.ClientSession`
         The aiohttp client session to use for the created HTTP client. If not provided, one is created for you.
-    server_uri: :class:`str`
-        The URI of the backend server. Defaults to the official API server at `https://api.adapt.chat`.
+    server: :class:`.AdaptServer`
+        The urls of the backend server. Defaults to the production server found at `adapt.chat`.
     token: :class:`str`
         The token to run the client with. Leave blank to delay specification of the token.
     """
-    
+
+    if TYPE_CHECKING:
+        ws: WebSocket | None
+        _connection: Connection
+
     def __init__(
         self,
         *,
         loop: asyncio.AbstractEventLoop | None = None,
         session: aiohttp.ClientSession | None = None,
-        server_uri: str = DEFAULT_API_URL,
+        server: AdaptServer = AdaptServer.production(),
         token: str | None = None,
     ) -> None:
+        self._server = server
         self.loop = loop or asyncio.get_event_loop()
-        self.http = HTTPClient(loop=self.loop, session=session, server_uri=server_uri, token=token)
+        self.http = HTTPClient(loop=self.loop, session=session, server_url=server.api, token=token)
 
         self._prepare_client()
         super().__init__()
 
-    def _prepare_client(self) -> None:
-        pass
+    def _prepare_client(self, **connection_options: Any) -> None:
+        self.ws = None
+        self._connection = Connection(loop=self.loop, dispatch=self.dispatch, **connection_options)
+
+    @property
+    def server(self) -> AdaptServer:
+        """The server the client retrieves all Adapt URLs from."""
+        return self._server
+
+    @server.setter
+    def server(self, value: AdaptServer) -> None:
+        self._server = value
+        self.http.server_url = value.api
+
+        if self.ws is not None:
+            self.ws.ws_url = value.harmony
+
+    @property
+    def connection(self) -> Connection:
+        """The connection object that manages the connection to Adapt and cached models."""
+        return self._connection
 
     @classmethod
-    def from_http(cls, http: HTTPClient) -> Self:
+    def from_http(cls, http: HTTPClient, *, server: AdaptServer | None = None) -> Self:
         """Creates a client from an HTTP client. This is used internally.
 
         Parameters
         ----------
         http: :class:`~.http.HTTPClient`
             The HTTP client to create the client object with.
+        server: :class:`.AdaptServer`
+            The urls of the backend server. Defaults to the production server found at `adapt.chat`.
 
         Returns
         -------
@@ -237,6 +268,7 @@ class Client(EventDispatcher):
         self = cls.__new__(cls)
         self.loop = http.loop
         self.http = http
+        self._server = server or AdaptServer.production().copy_with(api=http.server_url)
 
         self._prepare_client()
         super(Client, self).__init__()
@@ -249,6 +281,7 @@ class Client(EventDispatcher):
         email: str,
         password: str,
         method: TokenRetrievalMethod = 'reuse',
+        server: AdaptServer = AdaptServer.production(),
         **options: Any,
     ) -> Self:
         """|coro|
@@ -263,21 +296,31 @@ class Client(EventDispatcher):
             The password of the account.
         method: Literal['new', 'revoke', 'reuse']
             The method to use to retrieve the token. Defaults to `'reuse'`.
+        server: :class:`.AdaptServer`
+            The urls of the backend server. Defaults to the production server found at `adapt.chat`.
         **options
             Additional keyword-arguments to pass in when constructing the HTTP client
-            (i.e. `loop`, `session`, `server_uri`)
+            (i.e. `loop`, `session`)
 
         Returns
         -------
         :class:`~.Client`
             The created client object.
         """
-        http = HTTPClient(**options)
+        http = HTTPClient(**options, server_url=server.api)
         await http.login(email=email, password=password, method=method)
-        return cls.from_http(http)
+        return cls.from_http(http, server=server)
 
     @classmethod
-    async def create_user(cls, *, username: str, email: str, password: str, **options: Any) -> Self:
+    async def create_user(
+        cls,
+        *,
+        username: str,
+        email: str,
+        password: str,
+        server: AdaptServer = AdaptServer.production(),
+        **options: Any,
+    ) -> Self:
         """|coro|
 
         Registers a new user account, and returns a new client created to interact with that account.
@@ -290,18 +333,20 @@ class Client(EventDispatcher):
             The email of the new account.
         password: :class:`str`
             The password of the new account.
+        server: :class:`.AdaptServer`
+            The urls of the backend server. Defaults to the production server found at `adapt.chat`.
         **options
             Additional keyword-arguments to pass in when constructing the HTTP client
-            (i.e. `loop`, `session`, `server_uri`)
+            (i.e. `loop`, `session`)
 
         Returns
         -------
         :class:`~.Client`
             The created client object.
         """
-        http = HTTPClient(**options)
+        http = HTTPClient(**options, server_url=server.api)
         await http.create_user(username=username, email=email, password=password)
-        return cls.from_http(http)
+        return cls.from_http(http, server=server)
 
     async def start(self, token: str | None = None) -> None:
         """|coro|
@@ -318,6 +363,8 @@ class Client(EventDispatcher):
             raise ValueError('No token provided to start the client with')
 
         self.dispatch('start')
+        self.ws = WebSocket.from_http(self.connection, self.http, dispatch=self.dispatch, ws_url=self.server.harmony)
+        await self.ws.start()
 
     def run(self, token: str | None = None) -> None:
         """Runs the client, logging in with the provided token and connecting to harmony. This is a blocking call.
