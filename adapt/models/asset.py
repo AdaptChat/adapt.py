@@ -1,10 +1,141 @@
-class StatelessAsset:
-    """An asset that does not have access to any state.
+from __future__ import annotations
 
-    If you want to download this asset, you must manually fetch the asset data using the URL provided by this asset.
+from io import BufferedIOBase
+from typing import overload, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import Any, Literal, Self
+
+    from ..connection import Connection
+
+__all__ = ('Asset',)
+
+
+class AssetLike:
+    """Represents any CDN entry from convey, Adapt's CDN server."""
+
+    __slots__ = ('_connection', 'route', 'uuid', '_cached')
+
+    def __init__(self, *, connection: Connection, route: str, uuid: str | None = None) -> None:
+        self._connection = connection
+        self.route = route
+        self.uuid = uuid
+        self._cached: bytes | None = None
+
+    @property
+    def url(self) -> str:
+        return self._connection.server.convey + self.route
+
+    async def read(self, *, cache: bool = True) -> bytes:
+        """|coro|
+
+        Downloads the asset's contents into raw bytes.
+
+        Parameters
+        ----------
+        cache: :class:`bool`
+            Whether to cache the asset. Defaults to ``True``. If this is enabled, future calls to ``read``
+            will return the cached bytes instead of downloading the asset again.
+
+        .. note::
+            For assets that are cached, the cache is held on the **asset object** and not the connection. This means
+            that two different asset objects may not share the same cache.
+
+        Returns
+        -------
+        bytes
+            The raw bytes of the asset.
+        """
+        if cache and self._cached is not None:
+            return self._cached
+
+        async with self._connection.http.session.get(self.url) as response:
+            data = await response.read()
+            if cache:
+                self._cached = data
+            return data
+
+    async def save(
+        self,
+        fp: str | bytes | PathLike[Any] | BufferedIOBase,
+        *,
+        cache: bool = True,
+        seek_begin: bool = True,
+    ) -> int:
+        """|coro|
+
+        Downloads the asset's contents and saves it to a file.
+
+        Parameters
+        ----------
+        fp: :class:`str`, :class:`pathlib.Path`, or file-like object
+            The file path or file-like object to save the asset to.
+        cache: :class:`bool`
+            Whether to cache the asset. Defaults to ``True``. If this is enabled, future calls to ``save``
+            will not download the asset again.
+        seek_begin: :class:`bool`
+            Whether to seek to the beginning of the file after writing. Defaults to ``True``.
+
+        .. note::
+            For assets that are cached, the cache is held on the **asset object** and not the connection. This means
+            that two different asset objects may not share the same cache.
+
+        Returns
+        -------
+        int
+            The number of bytes written to the file.
+
+        Raises
+        ------
+        :exc:`TypeError`
+            If the file-like object does not support the ``write`` method.
+        """
+        data = await self.read(cache=cache)
+
+        if isinstance(fp, BufferedIOBase):
+            written = fp.write(data)
+            if seek_begin:
+                fp.seek(0)
+            return written
+
+        with open(fp, 'wb') as f:
+            return f.write(data)
+
+    def __bytes__(self) -> bytes:
+        return self._cached or b''
+
+    def __str__(self) -> str:
+        return self.url
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} route={self.url!r}>'
+
+    @overload
+    def __eq__(self, other: Self) -> bool:
+        ...
+
+    @overload
+    def __eq__(self, other: Any) -> Literal[False]:
+        ...
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, self.__class__) and self.url == other.url
+
+    def __ne__(self, other: Any) -> bool:
+        return not self.__eq__(other)
+
+    def __hash__(self) -> int:
+        return hash(self.url)
+
+
+class Asset(AssetLike):
+    """Represents an asset from Adapt's CDN, convey.
+
+    Attributes
+    ----------
+    route: :class:`str`
+        The route to the asset, without the base URL.
+    uuid: :class:`str` | None
+        The UUID of the asset. This could be ``None`` if the asset does not have a UUID.
     """
-
-    __slots__ = ('_url',)
-
-    def __init__(self, route: str) -> None:
-        pass

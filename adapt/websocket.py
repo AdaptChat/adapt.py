@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from aiohttp import ClientSession, ClientWebSocketResponse
 
     from .connection import Connection
-    from .http import HTTPClient
     from .types.ws import InboundMessage
 
     Dispatcher: TypeAlias = Callable[..., Task[list[Any]]]
@@ -37,7 +36,18 @@ class AttemptReconnect(Exception):
 class WebSocket:
     """The WebSocket client used to interact with Adapt's websocket, harmony."""
 
-    ws: ClientWebSocketResponse
+    __slots__ = (
+        '_connection',
+        '_loop',
+        '_session',
+        '_dispatch',
+        '_token',
+        '_msgpack',
+        'ws_url',
+        'ws',
+    )
+
+    ws: ClientWebSocketResponse | None
 
     def __init__(
         self,
@@ -57,17 +67,18 @@ class WebSocket:
         self._token = token
         self._msgpack = prefer_msgpack and HAS_MSGPACK
         self.ws_url = ws_url
+        self.ws = None
 
     @classmethod
-    def from_http(
+    def from_connection(
         cls,
         connection: Connection,
-        http: HTTPClient,
         *,
         dispatch: Dispatcher,
         prefer_msgpack: bool = True,
         ws_url: str = DEFAULT_WS_URL,
     ) -> Self:
+        http = connection.http
         return cls(
             connection,
             loop=http.loop,
@@ -135,3 +146,8 @@ class WebSocket:
                 if not self.ws.closed:
                     await self.ws.close()
                 raise
+
+    async def close(self) -> bool:
+        if self.ws is not None:
+            return await self.ws.close(code=1000)
+        return False

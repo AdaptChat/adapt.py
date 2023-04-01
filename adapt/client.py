@@ -8,14 +8,15 @@ import aiohttp
 
 from .connection import Connection
 from .http import HTTPClient
+from .server import AdaptServer
 from .util import maybe_coro
+from .websocket import WebSocket
 
 if TYPE_CHECKING:
     from typing import Any, Self, TypeAlias
 
-    from .server import AdaptServer
+    from .models.ready import ReadyEvent
     from .types.user import TokenRetrievalMethod
-    from .websocket import WebSocket
 
 P = ParamSpec('P')
 R = TypeVar('R')
@@ -91,10 +92,15 @@ class EventDispatcher:
             Called when the client establishes a connection with the websocket.
             """
 
-        async def on_ready(self) -> None:
+        async def on_ready(self, ready: ReadyEvent) -> None:
             """|coro|
 
             Called when the client is connected and ready to receive events from the websocket.
+
+            Parameters
+            ----------
+            ready: :class:`.ReadyEvent`
+                Data received with the ready event.
             """
 
     def __init__(self) -> None:
@@ -228,7 +234,13 @@ class Client(EventDispatcher):
 
     def _prepare_client(self, **connection_options: Any) -> None:
         self.ws = None
-        self._connection = Connection(loop=self.loop, dispatch=self.dispatch, **connection_options)
+        self._connection = Connection(
+            http=self.http,
+            server=self._server,
+            loop=self.loop,
+            dispatch=self.dispatch,
+            **connection_options,
+        )
 
     @property
     def server(self) -> AdaptServer:
@@ -363,7 +375,7 @@ class Client(EventDispatcher):
             raise ValueError('No token provided to start the client with')
 
         self.dispatch('start')
-        self.ws = WebSocket.from_http(self.connection, self.http, dispatch=self.dispatch, ws_url=self.server.harmony)
+        self.ws = WebSocket.from_connection(self.connection, dispatch=self.dispatch, ws_url=self.server.harmony)
         await self.ws.start()
 
     def run(self, token: str | None = None) -> None:
@@ -378,7 +390,10 @@ class Client(EventDispatcher):
             async with self:
                 await self.start(token)
 
-        self.loop.run_until_complete(runner())
+        try:
+            self.loop.run_until_complete(runner())
+        except KeyboardInterrupt:
+            pass
 
     async def close(self) -> None:
         """|coro|
@@ -387,6 +402,9 @@ class Client(EventDispatcher):
         This is automatically called if you use :meth:`~.Client.run`.
         """
         await self.http.close()
+
+        if self.ws is not None:
+            await self.ws.close()
 
     async def __aenter__(self) -> Self:
         return self

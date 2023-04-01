@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from typing import NamedTuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
+
+from .user import ClientUser
 
 if TYPE_CHECKING:
+    from ..connection import Connection
     from ..types.ws import ReadyEvent as RawReadyEvent
 
+__all__ = ('ReadyEvent',)
 
-class ReadyEvent(NamedTuple):
+
+class ReadyEvent:
     """Represents the ready event from the gateway. This event is sent when the client is ready to receive events.
-
-    .. note::
-        Like partial models, this model is stateless and is immutable. It is internally represented as a tuple.
 
     Attributes
     ----------
@@ -27,24 +29,31 @@ class ReadyEvent(NamedTuple):
     relationships: list[:class:`.Relationship`]
         A list of relationships the client has with other users.
     """
+
+    __slots__ = (
+        '_connection',
+        'session_id',
+        'user',
+        'guilds',
+        'dm_channels',
+        'presences',
+        'relationships',
+    )
+
+    _connection: Connection
     session_id: str
     user: ClientUser
+
+    # TODO:
     guilds: list[Guild]
     dm_channels: list[DMChannel]
     presences: list[Presence]
     relationships: list[Relationship]
 
-    @classmethod
-    def from_raw(cls, raw: RawReadyEvent) -> ReadyEvent:
-        """Creates a :class:`.ReadyEvent` from a raw event."""
-        return cls(
-            session_id=raw['session_id'],
-            user=ClientUser.from_raw(raw['user']),
-            guilds=[Guild.from_raw(g) for g in raw['guilds']],
-            dm_channels=[DMChannel.from_raw(c) for c in raw['dm_channels']],
-            presences=[Presence.from_raw(p) for p in raw['presences']],
-            relationships=[Relationship.from_raw(r) for r in raw['relationships']],
-        )
+    def __init__(self, *, connection: Connection, data: RawReadyEvent) -> None:
+        self._connection = connection
+        self.session_id = data['session_id']
+        self.user = ClientUser(connection=connection, data=data['user'])
 
     def __repr__(self) -> str:
         return f'<ReadyEvent session_id={self.session_id!r} user={self.user!r}>'
