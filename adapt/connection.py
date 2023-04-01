@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING
 
 from .models.ready import ReadyEvent
 from .models.user import ClientUser
+from .server import AdaptServer
 
 if TYPE_CHECKING:
     from typing import Any
 
     from .http import HTTPClient
-    from .server import AdaptServer
     from .types.ws import InboundMessage, ReadyEvent as RawReadyEvent
     from .websocket import Dispatcher
 

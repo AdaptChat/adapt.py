@@ -15,22 +15,17 @@ __all__ = ('Asset',)
 class AssetLike:
     """Represents any CDN entry from convey, Adapt's CDN server."""
 
-    __slots__ = ('_connection', 'route', 'uuid', '_cached')
+    __slots__ = ('_connection', 'url', '_cached')
 
-    def __init__(self, *, connection: Connection, route: str, uuid: str | None = None) -> None:
+    def __init__(self, *, connection: Connection | None, url: str) -> None:
         self._connection = connection
-        self.route = route
-        self.uuid = uuid
+        self.url = url
         self._cached: bytes | None = None
-
-    @property
-    def url(self) -> str:
-        return self._connection.server.convey + self.route
 
     async def read(self, *, cache: bool = True) -> bytes:
         """|coro|
 
-        Downloads the asset's contents into raw bytes.
+        Downloads the asset's contents into raw bytes. This cannot be used if the asset is stateless.
 
         Parameters
         ----------
@@ -46,7 +41,15 @@ class AssetLike:
         -------
         bytes
             The raw bytes of the asset.
+
+        Raises
+        ------
+        TypeError
+            If the asset is stateless.
         """
+        if not self._connection:
+            raise TypeError('Cannot read stateless asset')
+
         if cache and self._cached is not None:
             return self._cached
 
@@ -65,7 +68,7 @@ class AssetLike:
     ) -> int:
         """|coro|
 
-        Downloads the asset's contents and saves it to a file.
+        Downloads the asset's contents and saves it to a file. This cannot be used if the asset is stateless.
 
         Parameters
         ----------
@@ -89,7 +92,8 @@ class AssetLike:
         Raises
         ------
         :exc:`TypeError`
-            If the file-like object does not support the ``write`` method.
+            - If the file-like object does not support the ``write`` method.
+            - If the asset is stateless.
         """
         data = await self.read(cache=cache)
 
@@ -134,8 +138,6 @@ class Asset(AssetLike):
 
     Attributes
     ----------
-    route: :class:`str`
-        The route to the asset, without the base URL.
-    uuid: :class:`str` | None
-        The UUID of the asset. This could be ``None`` if the asset does not have a UUID.
+    url: :class:`str`
+        The URL of the asset.
     """

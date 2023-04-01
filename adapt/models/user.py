@@ -71,12 +71,12 @@ class BaseUser(AdaptObject):
     @property
     def avatar(self) -> Asset:
         """:class:`.Asset`: The user's avatar."""
-        return Asset(connection=self._connection, route=f'/avatars/{self.id}/{self._avatar}', uuid=self._avatar)
+        return Asset(connection=self._connection, url=self._avatar)
 
     @property
     def banner(self) -> Asset:
         """:class:`.Asset`: The user's banner."""
-        return Asset(connection=self._connection, route=f'/banners/{self.id}/{self._banner}', uuid=self._banner)
+        return Asset(connection=self._connection, url=self._banner)
 
     def __repr__(self) -> str:
         return (
@@ -84,7 +84,7 @@ class BaseUser(AdaptObject):
             f'discriminator={self.discriminator!r}>'
         )
 
-    def __format__(self, format_spec: str):
+    def __format__(self, format_spec: str) -> str:
         if format_spec == 'd':
             return self.display_name
         elif format_spec == 'u':
@@ -92,7 +92,7 @@ class BaseUser(AdaptObject):
         elif format_spec == 'm':
             return self.mention
         else:
-            return self.tag
+            return self.tag.__format__(format_spec)
 
 
 class ClientUser(BaseUser):
