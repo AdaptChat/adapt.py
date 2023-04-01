@@ -18,6 +18,7 @@ import adapt
 class Client(adapt.Client):
     """My example client"""
 
+    @adapt.once  # This event will only be called once
     async def on_ready(self, ready: adapt.ReadyEvent) -> None:
         print(f"Logged in as {ready.user}!")
 
