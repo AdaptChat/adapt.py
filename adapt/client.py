@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from typing import Any, Self, TypeAlias
 
     from .models.ready import ReadyEvent
+    from .models.user import ClientUser
     from .types.user import TokenRetrievalMethod
 
 P = ParamSpec('P')
@@ -257,8 +258,16 @@ class Client(EventDispatcher):
 
     @property
     def connection(self) -> Connection:
-        """The connection object that manages the connection to Adapt and cached models."""
+        """:class:`~.connection.Connection`: The connection object that manages the connection to Adapt and cached models."""
         return self._connection
+
+    @property
+    def user(self) -> ClientUser | None:
+        """:class:`.ClientUser` | None: The user object that represents the user account the client is logged into.
+
+        This is ``None`` if the client is not logged in.
+        """
+        return self._connection.user
 
     @classmethod
     def from_http(cls, http: HTTPClient, *, server: AdaptServer | None = None) -> Self:
