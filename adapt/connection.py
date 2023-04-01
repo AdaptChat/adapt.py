@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from .models.enums import Status
 from .models.ready import ReadyEvent
 from .models.user import ClientUser
 from .server import AdaptServer
@@ -26,6 +27,7 @@ class Connection:
         'loop',
         'user',
         'dispatch',
+        '_connect_status',
         '_is_ready',
         '_token',
         '_max_message_count',
@@ -39,6 +41,7 @@ class Connection:
         loop: asyncio.AbstractEventLoop | None = None,
         dispatch: Dispatcher,
         max_message_count: int = 1000,
+        status: Status = Status.online,
     ) -> None:
         self.http = http
         self.server = server
@@ -46,6 +49,7 @@ class Connection:
         self.user: ClientUser | None = None
         self.dispatch = dispatch
 
+        self._connect_status: Status = status
         self._is_ready: asyncio.Future[ReadyEvent] = loop.create_future()
         self._token: str | None = None
         self._max_message_count = max_message_count

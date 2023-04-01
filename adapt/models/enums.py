@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Self
 
-__all__ = ('ModelType',)
+__all__ = ('ModelType', 'Status')
 
 
 class ModelType(Enum):
@@ -23,3 +23,11 @@ class ModelType(Enum):
     @classmethod
     def _missing_(cls, value: Self) -> Self:
         return cls.unknown
+
+
+class Status(Enum):
+    """The status of a user's presence."""
+    online = 'online'
+    idle = 'idle'
+    dnd = 'dnd'
+    offline = 'offline'

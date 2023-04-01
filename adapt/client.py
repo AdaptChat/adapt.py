@@ -8,6 +8,7 @@ import aiohttp
 
 from .connection import Connection
 from .http import HTTPClient
+from .models.enums import Status
 from .server import AdaptServer
 from .util import maybe_coro
 from .websocket import WebSocket
@@ -87,6 +88,27 @@ class EventDispatcher:
     """Base class for receiving events and then dispatching them to event handlers registered on the client."""
 
     if TYPE_CHECKING:
+        async def on_event(self, event: str, *args: Any, **kwargs: Any) -> None:
+            """|coro|
+
+            A "catch all" event handler for all events.
+
+            Parameters
+            ----------
+            event: :class:`str`
+                The name of the event.
+            *args: Any
+                The positional arguments for the event.
+            **kwargs: Any
+                The keyword arguments for the event.
+            """
+
+        async def on_start(self) -> None:
+            """|coro|
+
+            Called when the client starts to connect. This can be used to perform any necessary setup.
+            """
+
         async def on_connect(self) -> None:
             """|coro|
 
@@ -164,7 +186,20 @@ class EventDispatcher:
             return callback
 
         return decorator
-    
+
+    def _dispatch_event(self, event: str, *args, **kwargs) -> asyncio.Task[list[Any]]:
+        coros = []
+        if callback := getattr(self, 'on_' + event, None):
+            assert callable(callback), f'Event listener for {event} is not callable'
+
+            if getattr(callback, '__adapt_call_once__', False):
+                setattr(self, 'on_' + event, None)
+
+            coros.append(maybe_coro(callback, *args, **kwargs))
+
+        coros.extend(listener.dispatch(event, *args, **kwargs) for listener in self._weak_listeners)
+        return asyncio.ensure_future(asyncio.gather(*coros))
+
     def dispatch(self, event: str, *args, **kwargs) -> asyncio.Task[list[Any]]:
         """Dispatches an event to its registered listeners.
 
@@ -177,17 +212,8 @@ class EventDispatcher:
         **kwargs
             Keyword arguments to pass into event handlers.
         """
-        coros = []
-        if callback := getattr(self, 'on_' + event, None):
-            assert callable(callback), f'Event listener for {event} is not callable'
-
-            if getattr(callback, '__adapt_call_once__', False):
-                setattr(self, 'on_' + event, None)
-
-            coros.append(maybe_coro(callback, *args, **kwargs))
-
-        coros.extend(listener.dispatch(event, *args, **kwargs) for listener in self._weak_listeners)
-        return asyncio.ensure_future(asyncio.gather(*coros))
+        self._dispatch_event('event', event, *args, **kwargs)
+        return self._dispatch_event(event, *args, **kwargs)
 
 
 class Client(EventDispatcher):
@@ -212,6 +238,8 @@ class Client(EventDispatcher):
         The urls of the backend server. Defaults to the production server found at `adapt.chat`.
     token: :class:`str`
         The token to run the client with. Leave blank to delay specification of the token.
+    status: :class:`.Status`
+        The status to set the client to when it connects to harmony. Defaults to :attr:`.Status.online`.
     """
 
     if TYPE_CHECKING:
@@ -225,22 +253,23 @@ class Client(EventDispatcher):
         session: aiohttp.ClientSession | None = None,
         server: AdaptServer = AdaptServer.production(),
         token: str | None = None,
+        status: Status = Status.online,
     ) -> None:
         self._server = server
         self.loop = loop or asyncio.get_event_loop()
         self.http = HTTPClient(loop=self.loop, session=session, server_url=server.api, token=token)
 
-        self._prepare_client()
+        self._prepare_client(status=status)
         super().__init__()
 
-    def _prepare_client(self, **connection_options: Any) -> None:
+    def _prepare_client(self, **options: Any) -> None:
         self.ws = None
         self._connection = Connection(
             http=self.http,
             server=self._server,
             loop=self.loop,
             dispatch=self.dispatch,
-            **connection_options,
+            **options,
         )
 
     @property
@@ -270,7 +299,7 @@ class Client(EventDispatcher):
         return self._connection.user
 
     @classmethod
-    def from_http(cls, http: HTTPClient, *, server: AdaptServer | None = None) -> Self:
+    def from_http(cls, http: HTTPClient, *, server: AdaptServer | None = None, **kwargs: Any) -> Self:
         """Creates a client from an HTTP client. This is used internally.
 
         Parameters
@@ -279,6 +308,8 @@ class Client(EventDispatcher):
             The HTTP client to create the client object with.
         server: :class:`.AdaptServer`
             The urls of the backend server. Defaults to the production server found at `adapt.chat`.
+        **kwargs
+            Additional keyword arguments to pass into the client constructor.
 
         Returns
         -------
@@ -291,7 +322,7 @@ class Client(EventDispatcher):
         self.http = http
         self._server = server or AdaptServer.production().copy_with(api=http.server_url)
 
-        self._prepare_client()
+        self._prepare_client(**kwargs)
         super(Client, self).__init__()
         return self
 
@@ -384,7 +415,7 @@ class Client(EventDispatcher):
             raise ValueError('No token provided to start the client with')
 
         self.dispatch('start')
-        self.ws = WebSocket.from_connection(self.connection, dispatch=self.dispatch, ws_url=self.server.harmony)
+        self.ws = WebSocket(self.connection, ws_url=self.server.harmony)
         await self.ws.start()
 
     def run(self, token: str | None = None) -> None:
