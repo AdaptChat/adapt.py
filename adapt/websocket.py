@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import TYPE_CHECKING
 
 from aiohttp import WSMsgType
@@ -32,28 +33,62 @@ DEFAULT_WS_URL: Final[str] = AdaptServer.production().harmony
 class HeartbeatManager:
     """Manages and acks heartbeats from and to harmony."""
 
-    __slots__ = ('_ws', '_connection', 'acked', '_is_active', '_task')
+    __slots__ = (
+        '_ws',
+        '_connection',
+        'acked',
+        '_is_active',
+        '_task',
+        '_last_heartbeat',
+        '_last_heartbeat_ack',
+        '_heartbeat_interval',
+        '_heartbeat_timeout',
+    )
 
-    def __init__(self, ws: WebSocket, /) -> None:
+    def __init__(
+        self,
+        ws: WebSocket,
+        /,
+        *,
+        heartbeat_interval: float = 15.0,
+        heartbeat_timeout: float = 3.0,
+    ) -> None:
         self._ws = ws
         self._connection = ws._connection
         self.acked = self._connection.loop.create_future()
         self._is_active = False
 
+        self._heartbeat_interval = heartbeat_interval
+        self._heartbeat_timeout = heartbeat_timeout
+        self._last_heartbeat: int | None = None
+        self._last_heartbeat_ack: int | None = None
+
     @property
     def is_active(self) -> bool:
         return self._is_active
 
+    @property
+    def loop(self) -> asyncio.AbstractEventLoop:
+        return self._connection.loop
+
+    @property
+    def latency_ns(self) -> int | None:
+        if self._last_heartbeat is None or self._last_heartbeat_ack is None:
+            return None
+
+        return self._last_heartbeat_ack - self._last_heartbeat
+
     def start(self) -> None:
         if self.is_active:
             return
-        self.acked = self._connection.loop.create_future()
-        self._task = self._connection.loop.create_task(self.heartbeat_task())
+        self.acked = self.loop.create_future()
+        self._task = self.loop.create_task(self.heartbeat_task())
         self._is_active = True
 
     def ack(self) -> None:
+        self._last_heartbeat_ack = time.perf_counter_ns()
         self.acked.set_result(True)
-        self.acked = self._connection.loop.create_future()
+        self.acked = self.loop.create_future()
 
     async def stop(self) -> None:
         if not self.is_active:
@@ -68,17 +103,18 @@ class HeartbeatManager:
 
     async def heartbeat(self) -> None:
         await self._ws.send({"op": "ping"})
+        self._last_heartbeat = time.perf_counter_ns()
 
     async def heartbeat_task(self) -> None:
         while not self._ws.closed:
             await self.heartbeat()
             try:
-                await asyncio.wait_for(self.acked, timeout=3)
+                await asyncio.wait_for(self.acked, timeout=self._heartbeat_timeout)
             except asyncio.TimeoutError:
                 await self.stop()
                 raise AttemptReconnect
 
-            await asyncio.sleep(self._ws._heartbeat_interval)
+            await asyncio.sleep(self._heartbeat_interval)
 
 
 class AttemptReconnect(Exception):
@@ -95,7 +131,6 @@ class WebSocket:
         '_dispatch',
         '_token',
         '_msgpack',
-        '_heartbeat_interval',
         '_heartbeat_manager',
         'ws_url',
         'ws',
@@ -110,6 +145,7 @@ class WebSocket:
         prefer_msgpack: bool = True,
         ws_url: str = DEFAULT_WS_URL,
         heartbeat_interval: float = 15.0,
+        heartbeat_timeout: float = 3.0,
     ) -> None:
         self._connection = connection
         self._loop = connection.loop
@@ -119,8 +155,11 @@ class WebSocket:
         self._dispatch = connection.dispatch
         self._token = http.token
         self._msgpack = prefer_msgpack and HAS_MSGPACK
-        self._heartbeat_interval = heartbeat_interval
-        self._heartbeat_manager = HeartbeatManager(self)
+        self._heartbeat_manager = HeartbeatManager(
+            self,
+            heartbeat_interval=heartbeat_interval,
+            heartbeat_timeout=heartbeat_timeout,
+        )
 
         self.ws_url = ws_url
         self.ws = None
@@ -130,6 +169,14 @@ class WebSocket:
     @property
     def closed(self) -> bool:
         return self.ws is None or self.ws.closed
+
+    @property
+    def latency(self) -> float | None:
+        return self.latency_ns and self.latency_ns / 1_000_000_000
+
+    @property
+    def latency_ns(self) -> int | None:
+        return self._heartbeat_manager.latency_ns
 
     async def send(self, data: dict[Any, Any] | TypedDict) -> None:
         if self._msgpack:

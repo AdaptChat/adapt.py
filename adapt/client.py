@@ -291,6 +291,30 @@ class Client(EventDispatcher):
         return self._connection
 
     @property
+    def latency(self) -> float | None:
+        """:class:`float`: The amount of time in seconds it took for the previous heartbeat to harmony (the websocket)
+        to be acknowledged.
+
+        This is ``None`` if:
+        - The client is not logged in.
+        - The client has not yet sent a heartbeat to harmony.
+        - The client has not yet received a heartbeat acknowledgement from harmony.
+        """
+        return self.ws and self.ws.latency
+
+    @property
+    def latency_ns(self) -> int | None:
+        """:class:`int`: The equivalent of :attr:`.latency` but in nanoseconds. This could yield more accurate
+        measurements due to floating point precision errors in :attr:`.latency`.
+
+        See Also
+        --------
+        :attr:`.latency`
+            The equivalent of this property in seconds. See this for more information.
+        """
+        return self.ws and self.ws.latency_ns
+
+    @property
     def user(self) -> ClientUser | None:
         """:class:`.ClientUser` | None: The user object that represents the user account the client is logged into.
 
