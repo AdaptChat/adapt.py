@@ -227,7 +227,7 @@ class WebSocket:
             "status": self._connection._connect_status.value,
             "device": "desktop",
         })
-        await self._dispatch("reconnect" if reconnect else "connect")
+        self._dispatch("reconnect" if reconnect else "connect")
     
     async def start(self) -> None:
         await self.connect()
@@ -241,7 +241,7 @@ class WebSocket:
             except Exception:
                 if not self.ws.closed:
                     await self.ws.close()
-                    await self._dispatch("disconnect")
+                    self._dispatch("disconnect")
                     await self._heartbeat_manager.stop()
                 raise
 
