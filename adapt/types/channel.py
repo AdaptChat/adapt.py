@@ -7,6 +7,8 @@ from .role import PermissionPair
 
 __all__ = (
     'GuildChannelType',
+    'CreateGuildChannelPayload',
+    'CreateDMChannelPayload',
     'DMChannelType',
     'ChannelType',
     'PermissionOverwrite',
@@ -19,6 +21,22 @@ __all__ = (
 GuildChannelType: TypeAlias = Literal['text', 'announcement', 'voice', 'category']
 DMChannelType: TypeAlias = Literal['dm', 'group']
 ChannelType: TypeAlias = GuildChannelType | DMChannelType
+
+
+class _CreateGuildChannelPayloadRequired(TypedDict):
+    type: GuildChannelType
+    name: str
+    icon: str | None
+    parent_id: Snowflake | None
+    overwrites: list[PermissionOverwrite] | None
+
+
+class CreateGuildChannelPayload(_CreateGuildChannelPayloadRequired, total=False):
+    # Text, Announcement
+    topic: str | None
+    icon: str | None
+    # Voice
+    user_limit: int
 
 
 class _GuildChannelRequired(TypedDict):
@@ -43,6 +61,18 @@ class GuildChannel(_GuildChannelRequired, total=False):
 
 class PermissionOverwrite(PermissionPair):
     id: Snowflake
+
+
+class _CreateDMChannelPayloadRequired(TypedDict):
+    type: DMChannelType
+
+
+class CreateDMChannelPayload(_CreateDMChannelPayloadRequired, total=False):
+    # DM
+    recipient_id: Snowflake
+    # Group DM
+    name: str
+    recipient_ids: list[Snowflake]
 
 
 class _DMChannelRequired(TypedDict):
