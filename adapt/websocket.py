@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from aiohttp import WSMsgType
 
 from .server import AdaptServer
+from .util import MISSING
 
 if TYPE_CHECKING:
     from asyncio import Task
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from aiohttp import ClientWebSocketResponse
 
     from .connection import Connection
+    from .models.enums import Status
     from .types.ws import InboundMessage
 
     Dispatcher: TypeAlias = Callable[..., Task[list[Any]]]
@@ -228,6 +230,13 @@ class WebSocket:
             "device": "desktop",
         })
         self._dispatch("reconnect" if reconnect else "connect")
+
+    async def update_presence(self, *, status: Status = MISSING) -> None:
+        payload = {"op": "update_presence"}
+        if status is not MISSING:
+            payload["status"] = status.value
+
+        await self.send(payload)
     
     async def start(self) -> None:
         await self.connect()

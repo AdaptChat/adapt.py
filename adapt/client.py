@@ -10,7 +10,7 @@ from .connection import Connection
 from .http import HTTPClient
 from .models.enums import Status
 from .server import AdaptServer
-from .util import maybe_coro
+from .util import maybe_coro, MISSING
 from .websocket import WebSocket
 
 if TYPE_CHECKING:
@@ -348,7 +348,9 @@ class Client(EventDispatcher):
         return self._connection.get_user(user_id)
 
     async def fetch_user(self, user_id: int, *, respect_cache: bool = False) -> User:
-        """Fetches a user directly from the API.
+        """|coro|
+
+        Fetches a user directly from the API.
 
         Parameters
         ----------
@@ -384,7 +386,9 @@ class Client(EventDispatcher):
         return self._connection.get_relationship(user_id)
 
     async def fetch_relationships(self) -> Iterable[Relationship]:
-        """Fetches all relationships between the client and other users directly from the API.
+        """|coro|
+
+        Fetches all relationships between the client and other users directly from the API.
 
         Returns
         -------
@@ -394,6 +398,18 @@ class Client(EventDispatcher):
         """
         relationships = await self.http.get_relationships()
         return map(self._connection.update_raw_relationship, relationships)
+
+    async def update_presence(self, *, status: Status = MISSING) -> None:
+        """|coro|
+
+        Updates the client's presence.
+
+        Parameters
+        ----------
+        status: :class:`.Status`
+            The new status to update the client's presence with. Leave blank to keep the current status.
+        """
+        await self.ws.update_presence(status=status)
 
     @classmethod
     def from_http(cls, http: HTTPClient, *, server: AdaptServer | None = None, **kwargs: Any) -> Self:
