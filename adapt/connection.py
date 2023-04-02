@@ -96,7 +96,7 @@ class Connection:
 
     def update_relationship(self, *, user_id: int, type: RelationshipType) -> Relationship:
         if relationship := self.get_relationship(user_id):
-            relationship.type = type
+            relationship._type = type
             return relationship
 
         self._relationships[user_id] = new = Relationship(connection=self, user_id=user_id, type=type)
