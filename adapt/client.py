@@ -67,6 +67,9 @@ class WeakEventRegistry(Generic[P, R]):
         Dispatches an event with the given arguments.
         """
 
+        if getattr(self.callback, '__adapt_call_once__', False):
+            self.destroy()
+
         if self._destroy and time.perf_counter() >= self._destroy:
             return self.destroy()
 
@@ -166,11 +169,6 @@ class EventDispatcher:
 
             events = events or (callback.__name__,)
             events = tuple(event.lower().removeprefix('on_') for event in events)
-
-            if getattr(callback, '__adapt_call_once__', False):
-                if limit is not None:
-                    raise ValueError('Cannot use limit kwarg and @once decorator at the same time.')
-                limit = 1
 
             def event_check(event: str) -> bool:
                 return event.removeprefix('on_') in events
