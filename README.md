@@ -53,5 +53,6 @@ server = AdaptServer(
     harmony="https://my-adapt-instance.com/harmony",
     convey="https://my-adapt-instance.com/convey",
 )
+client = Client(server=server)
 ...
 ```

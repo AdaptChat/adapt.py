@@ -1,4 +1,4 @@
-"""Example of a simple bot that responds to any message that says "ping" with "pong"."""
+"""Example of a simple bot that responds to any message that says "ping" with "Pong!"."""
 
 import adapt
 
@@ -15,7 +15,7 @@ async def on_ready(ready):
 # Message event handler. This is called when a message is received.
 @client.event
 async def on_message(message):
-    # If the message content is "ping", respond with "pong".
+    # If the message content is "ping", respond with "Pong!".
     if message.content == 'ping':
         await message.channel.send('Pong!')
 
