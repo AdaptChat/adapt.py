@@ -6,10 +6,13 @@ from .asset import Asset
 from .object import AdaptObject
 
 if TYPE_CHECKING:
+    from typing import Any, Self
+
+    from .enums import RelationshipType
     from ..connection import Connection
     from ..types.user import ClientUser as RawClientUser, User as RawUser
 
-__all__ = ('ClientUser', 'User')
+__all__ = ('ClientUser', 'User', 'Relationship')
 
 
 class BaseUser(AdaptObject):
@@ -141,3 +144,179 @@ class User(BaseUser):
 
     def __init__(self, *, connection: Connection, data: RawUser) -> None:
         super().__init__(connection=connection, data=data)
+
+    @property
+    def relationship(self) -> Relationship | None:
+        """:class:`.Relationship`: The relationship between you and this user.
+
+        Returns ``None`` if no relationship exists.
+        """
+        return self._connection.get_relationship(self.id)
+
+    async def send_friend_request(self) -> Relationship:
+        """|coro|
+
+        Sends a friend request to this user.
+
+        Returns
+        -------
+        :class:`.Relationship`
+            The relationship created from sending the friend request.
+        """
+        relationship = await self._connection.http.send_friend_request(
+            username=self.username,
+            discriminator=self.discriminator,
+        )
+        return self._connection.update_raw_relationship(relationship)
+
+    async def accept_friend_request(self) -> Relationship:
+        """|coro|
+
+        Accepts the incoming friend request from this user.
+
+        Returns
+        -------
+        :class:`.Relationship`
+            The relationship created from accepting the friend request.
+
+        Raises
+        ------
+        TypeError
+            If there is no incoming friend request from this user.
+        """
+        if self.relationship.type is not RelationshipType.incoming:
+            raise TypeError('No incoming friend request from this user')
+
+        relationship = await self._connection.http.accept_friend_request(self.id)
+        return self._connection.update_raw_relationship(relationship)
+
+    async def block(self) -> Relationship:
+        """|coro|
+
+        Blocks this user.
+
+        Returns
+        -------
+        :class:`.Relationship`
+            The relationship created from blocking the user.
+        """
+        relationship = await self._connection.http.block_user(self.id)
+        return self._connection.update_raw_relationship(relationship)
+
+    async def _delete_relationship_if_of_type(self, type: RelationshipType) -> None:
+        if self.relationship is not None and self.relationship.type is type:
+            await self.relationship.delete()
+
+    async def unblock(self) -> None:
+        """|coro|
+
+        Unblocks this user. This is a checked-equivalent of :meth:`.Relationship.delete`.
+
+        Raises
+        ------
+        TypeError
+            If this user is not blocked.
+        """
+        await self._delete_relationship_if_of_type(RelationshipType.blocked)
+
+    async def revoke_friend_request(self) -> None:
+        """|coro|
+
+        Revokes the outgoing friend request to this user. This is a checked-equivalent of
+        :meth:`.Relationship.delete`.
+
+        Raises
+        ------
+        TypeError
+            If there is no outgoing friend request to this user.
+        """
+        await self._delete_relationship_if_of_type(RelationshipType.outgoing)
+
+    async def decline_friend_request(self) -> None:
+        """|coro|
+
+        Declines the incoming friend request from this user. This is a checked-equivalent of
+        :meth:`.Relationship.delete`.
+
+        Raises
+        ------
+        TypeError
+            If there is no incoming friend request from this user.
+        """
+        await self._delete_relationship_if_of_type(RelationshipType.incoming)
+
+    async def remove_friend(self) -> None:
+        """|coro|
+
+        Removes this user as a friend. This is a checked-equivalent of :meth:`.Relationship.delete`.
+
+        Raises
+        ------
+        TypeError
+            If this user is not a friend.
+        """
+        await self._delete_relationship_if_of_type(RelationshipType.friend)
+
+
+class Relationship:
+    """Represents a relationship between you, the client user, and another user."""
+
+    __slots__ = ('_connection', '_user_id', '_type')
+
+    def __init__(self, *, connection: Connection, user_id: int, type: RelationshipType) -> None:
+        self._connection = connection
+        self._user_id = user_id
+        self._type = type
+
+    @property
+    def user(self) -> User:
+        """:class:`.User`: The user that this relationship is with."""
+        return self._connection.get_user(self._user_id)
+
+    @property
+    def type(self) -> RelationshipType:
+        """:class:`.RelationshipType`: The type of this relationship."""
+        return self._type
+
+    async def delete(self) -> None:
+        """|coro|
+
+        Deletes this relationship:
+
+        - If the relationship type is ``friend``, this will unfriend the user.
+        - If the relationship type is ``outgoing_request``, this will cancel the outgoing friend request.
+        - If the relationship type is ``incoming_request``, this will decline the incoming friend request.
+        - If the relationship type is ``blocked``, this will unblock the user.
+        """
+        await self._connection.http.delete_relationship(self._user_id)
+
+    async def accept(self) -> Self:
+        """|coro|
+
+        Accepts this relationship if it is an incoming friend request. This is equivalent to calling
+        :meth:`.User.accept_friend_request`.
+
+        Returns
+        -------
+        :class:`.Relationship`
+            The relationship created from accepting the friend request.
+
+        Raises
+        ------
+        TypeError
+            If the relationship type is not ``incoming_request``.
+        """
+        return await self.user.accept_friend_request()
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} user={self.user!r} type={self.type!r}>'
+
+    @property
+    def _key(self) -> tuple[int, RelationshipType]:
+        return self._user_id, self._type
+
+    def __hash__(self) -> int:
+        return hash(self._key)
+
+    def __eq__(self, other: Any) -> bool:
+        return isinstance(other, self.__class__) and other._key == self._key

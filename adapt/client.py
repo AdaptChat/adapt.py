@@ -14,10 +14,10 @@ from .util import maybe_coro
 from .websocket import WebSocket
 
 if TYPE_CHECKING:
-    from typing import Any, Self, TypeAlias
+    from typing import Any, Iterable, Self, ValuesView, TypeAlias
 
     from .models.ready import ReadyEvent
-    from .models.user import ClientUser
+    from .models.user import ClientUser, Relationship, User
     from .types.user import TokenRetrievalMethod
 
 P = ParamSpec('P')
@@ -297,6 +297,79 @@ class Client(EventDispatcher):
         This is ``None`` if the client is not logged in.
         """
         return self._connection.user
+
+    @property
+    def users(self) -> ValuesView[User]:
+        """Iterable[:class:`.User`]: An iterable of users that the client has cached."""
+        return self._connection._users.values()
+
+    @property
+    def relationships(self) -> ValuesView[Relationship]:
+        """Iterable[:class:`.Relationship`]: An iterable of relationships that the client has cached."""
+        return self._connection._relationships.values()
+
+    def get_user(self, user_id: int) -> User | None:
+        """Retrieves a user from the cache.
+
+        Parameters
+        ----------
+        user_id: :class:`int`
+            The user ID to retrieve.
+
+        Returns
+        -------
+        :class:`.User` | None
+            The user object that was retrieved, or ``None`` if no user was found.
+        """
+        return self._connection.get_user(user_id)
+
+    async def fetch_user(self, user_id: int, *, respect_cache: bool = False) -> User:
+        """Fetches a user directly from the API.
+
+        Parameters
+        ----------
+        user_id: :class:`int`
+            The user ID to fetch.
+        respect_cache: :class:`bool`
+            If ``True``, if the user is found in the cache, it will be returned instead of fetching from the API.
+
+        Returns
+        -------
+        :class:`.User` | None
+            The user object that was fetched, or ``None`` if no user was found.
+        """
+        if cached := respect_cache and self.get_user(user_id):
+            return cached
+
+        user = self._connection.add_raw_user(await self.http.get_user(user_id))
+        return user
+
+    def get_relationship(self, user_id: int) -> Relationship | None:
+        """Retrieves the relationship between the client and the user with the given ID from the cache.
+
+        Parameters
+        ----------
+        user_id: :class:`int`
+            The user ID to retrieve.
+
+        Returns
+        -------
+        :class:`.Relationship`
+            The relationship object that was retrieved, or ``None`` if no relationship was found.
+        """
+        return self._connection.get_relationship(user_id)
+
+    async def fetch_relationships(self) -> Iterable[Relationship]:
+        """Fetches all relationships between the client and other users directly from the API.
+
+        Returns
+        -------
+        Iterable[:class:`.Relationship`]
+            An iterable of relationship objects that were fetched. This is a generator that lazily resolves the
+            relationships into :class:`.Relationship` objects.
+        """
+        relationships = await self.http.get_relationships()
+        return map(self._connection.update_raw_relationship, relationships)
 
     @classmethod
     def from_http(cls, http: HTTPClient, *, server: AdaptServer | None = None, **kwargs: Any) -> Self:

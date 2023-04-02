@@ -4,13 +4,12 @@ from base64 import b64encode, urlsafe_b64decode
 from datetime import datetime
 from inspect import isawaitable
 from typing import (
+    Any,
     Awaitable,
     Callable,
     Final,
-    Optional,
     ParamSpec,
     TypeVar,
-    overload,
 )
 
 from .models.enums import ModelType
@@ -29,6 +28,25 @@ P = ParamSpec('P')
 R = TypeVar('R')
 
 ADAPT_EPOCH_MILLIS: Final[int] = 1_671_926_400_000
+
+
+class _Missing:
+    __slots__ = ()
+
+    def __eq__(self, other: Any) -> bool:
+        return False
+
+    def __bool__(self) -> bool:
+        return False
+
+    def __hash__(self) -> int:
+        return 0
+
+    def __repr__(self) -> str:
+        return '...'
+
+
+MISSING: Any = _Missing()
 
 
 # FIXME: Replace when Ratelimiter exists
@@ -61,28 +79,6 @@ def _bytes_to_image_data(data: bytes) -> str:
     mimetype = _get_mimetype(data)
     result = b64encode(data).decode('ascii')
     return f'data:{mimetype};base64,{result}'
-
-
-@overload
-def _try_int(value: int, /) -> int:
-    ...
-
-
-@overload
-def _try_int(value: str, /) -> Optional[int]:
-    ...
-
-
-@overload
-def _try_int(value: None, /) -> None:
-    ...
-
-
-def _try_int(value, /):
-    try:
-        return int(value)
-    except (ValueError, TypeError):
-        return None
 
 
 def extract_user_id_from_token(token: str, /) -> int:

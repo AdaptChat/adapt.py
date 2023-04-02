@@ -6,12 +6,31 @@ import asyncio
 from typing import Literal, TYPE_CHECKING
 
 from .server import AdaptServer
-from .util import extract_user_id_from_token
+from .util import extract_user_id_from_token, _bytes_to_image_data, MISSING
 
 if TYPE_CHECKING:
-    from typing import Any, Final, TypeAlias, Self, TypedDict
+    from typing import Any, Final, TypeAlias, Self
 
-    from .types.user import TokenRetrievalMethod, LoginRequest, LoginResponse, CreateUserPayload, CreateUserResponse
+    from .types.channel import (
+        Channel,
+        DMChannel,
+        GuildChannel,
+        GuildChannelType,
+        CreateGuildChannelPayload,
+        CreateDMChannelPayload,
+    )
+    from .types.user import (
+        CreateUserPayload,
+        CreateUserResponse,
+        EditUserPayload,
+        SendFriendRequestPayload,
+        LoginRequest,
+        LoginResponse,
+        TokenRetrievalMethod,
+        ClientUser,
+        User,
+        Relationship,
+    )
 
 DEFAULT_API_URL: Final[str] = AdaptServer.production().api
 
@@ -61,7 +80,7 @@ class HTTPClient:
         *,
         headers: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
-        json: TypedDict | None = None,
+        json: Any = None,
     ) -> Any:
         headers = headers or {}
         if self.token is not None:
@@ -82,6 +101,8 @@ class HTTPClient:
             response.raise_for_status()
             return await response.json()
 
+    # Auth
+
     async def login(self, *, email: str, password: str, method: TokenRetrievalMethod = 'reuse') -> LoginResponse:
         payload: LoginRequest = {
             'email': email,
@@ -93,6 +114,8 @@ class HTTPClient:
         self.token = response['token']
         return response
 
+    # Users
+
     async def create_user(self, *, username: str, email: str, password: str) -> CreateUserResponse:
         payload: CreateUserPayload = {
             'username': username,
@@ -103,6 +126,85 @@ class HTTPClient:
         self.client_id = response['id']
         self.token = response['token']
         return response
+
+    async def get_user(self, user_id: int) -> User:
+        return await self.request('GET', f'/users/{user_id}')
+
+    async def get_authenticated_user(self) -> ClientUser:
+        return await self.request('GET', '/users/me')
+
+    async def edit_authenticated_user(
+        self,
+        *,
+        username: str = MISSING,
+        avatar: bytes | None = MISSING,
+        banner: bytes | None = MISSING,
+        bio: str | None = MISSING,
+    ) -> ClientUser:
+        payload: EditUserPayload = {'username': username}
+        if avatar is not MISSING:
+            payload['avatar'] = _bytes_to_image_data(avatar)
+        if banner is not MISSING:
+            payload['banner'] = _bytes_to_image_data(banner)
+        if bio is not MISSING:
+            payload['bio'] = bio
+
+        return await self.request('PATCH', '/users/me', json=payload)
+
+    async def delete_authenticated_user(self) -> None:
+        await self.request('DELETE', '/users/me')
+
+    async def get_relationships(self) -> list[Relationship]:
+        return await self.request('GET', '/relationships')
+
+    async def send_friend_request(self, *, username: str, discriminator: int) -> Relationship:
+        payload: SendFriendRequestPayload = {
+            'username': username,
+            'discriminator': discriminator,
+        }
+        return await self.request('POST', '/relationships/friends', json=payload)
+
+    async def accept_friend_request(self, user_id: int) -> Relationship:
+        return await self.request('PUT', f'/relationships/friends/{user_id}')
+
+    async def block_user(self, user_id: int) -> Relationship:
+        return await self.request('PUT', f'/relationships/blocks/{user_id}')
+
+    async def delete_relationship(self, user_id: int) -> None:
+        await self.request('DELETE', f'/relationships/{user_id}')
+
+    # Channels
+
+    async def get_channel(self, channel_id: int) -> Channel:
+        return await self.request('GET', f'/channels/{channel_id}')
+
+    # TODO async def edit_channel
+
+    async def delete_channel(self, channel_id: int) -> None:
+        await self.request('DELETE', f'/channels/{channel_id}')
+
+    async def get_guild_channels(self, guild_id: int) -> list[GuildChannel]:
+        return await self.request('GET', f'/guilds/{guild_id}/channels')
+
+    # TODO async def create_guild_channel
+
+    async def get_dm_channels(self) -> list[DMChannel]:
+        return await self.request('GET', '/users/me/channels')
+
+    async def create_user_dm_channel(self, recipient_id: int) -> DMChannel:
+        payload: CreateDMChannelPayload = {
+            'type': 'dm',
+            'recipient_id': recipient_id,
+        }
+        return await self.request('POST', '/users/me/channels', json=payload)
+
+    async def create_group_dm_channel(self, *, name: str, recipient_ids: list[int]) -> DMChannel:
+        payload: CreateDMChannelPayload = {
+            'type': 'group',
+            'name': name,
+            'recipient_ids': recipient_ids,
+        }
+        return await self.request('POST', '/users/me/channels', json=payload)
 
     async def close(self) -> None:
         await self.session.close()

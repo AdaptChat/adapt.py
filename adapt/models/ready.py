@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .user import ClientUser
+from .enums import RelationshipType
+from .user import ClientUser, User, Relationship
 
 if TYPE_CHECKING:
     from ..connection import Connection
@@ -13,6 +14,11 @@ __all__ = ('ReadyEvent',)
 
 class ReadyEvent:
     """Represents the ready event from the gateway. This event is sent when the client is ready to receive events.
+
+    .. note::
+        Just like all models, this class is not meant to be constructed by the user. However, if for some reason you
+        need to construct this class, it should be known that the constructor mutates the given connection state, which
+        could lead to unexpected behaviour.
 
     Attributes
     ----------
@@ -43,17 +49,33 @@ class ReadyEvent:
     _connection: Connection
     session_id: str
     user: ClientUser
+    relationships: list[Relationship]
 
     # TODO:
     guilds: list[Guild]
     dm_channels: list[DMChannel]
     presences: list[Presence]
-    relationships: list[Relationship]
 
     def __init__(self, *, connection: Connection, data: RawReadyEvent) -> None:
         self._connection = connection
         self.session_id = data['session_id']
-        self.user = ClientUser(connection=connection, data=data['user'])
+
+        self.user = connection.user = ClientUser(connection=connection, data=data['user'])
+        relationships: list[Relationship] = []
+        seen: set[int] = set()
+
+        for relationship in data['relationships']:
+            user_data = relationship['user']
+            user_id = user_data['id']
+
+            if user_id not in seen:
+                connection.add_user(User(connection=connection, data=user_data))
+                seen.add(user_id)
+
+            full = connection.update_relationship(user_id=user_id, type=RelationshipType(relationship['type']))
+            relationships.append(full)
+
+        self.relationships = relationships
 
     def __repr__(self) -> str:
         return f'<ReadyEvent session_id={self.session_id!r} user={self.user!r}>'

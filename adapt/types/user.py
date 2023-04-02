@@ -44,6 +44,21 @@ class CreateUserResponse(TypedDict):
     token: str
 
 
+class _EditUserPayloadRequired(TypedDict):
+    username: str
+
+
+class EditUserPayload(_EditUserPayloadRequired, total=False):
+    avatar: str | None
+    banner: str | None
+    bio: str | None
+
+
+class SendFriendRequestPayload(TypedDict):
+    username: str
+    discriminator: int
+
+
 class User(TypedDict):
     id: Snowflake
     username: str
