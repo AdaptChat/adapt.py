@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import NamedTuple, TYPE_CHECKING
 
+from .util import IS_DOCUMENTING
+
 if TYPE_CHECKING:
     from typing import Self
 
@@ -64,3 +66,7 @@ class AdaptServer(NamedTuple):
             harmony=harmony or self.harmony,
             convey=convey or self.convey,
         )
+
+    if IS_DOCUMENTING:
+        def __repr__(self) -> str:
+            return 'AdaptServer.production()'

@@ -27,15 +27,15 @@ class AssetLike:
 
         Downloads the asset's contents into raw bytes. This cannot be used if the asset is stateless.
 
+        .. note::
+            For assets that are cached, the cache is held on the **asset object** and not the connection. This means
+            that two different asset objects may not share the same cache.
+
         Parameters
         ----------
         cache: :class:`bool`
             Whether to cache the asset. Defaults to ``True``. If this is enabled, future calls to ``read``
             will return the cached bytes instead of downloading the asset again.
-
-        .. note::
-            For assets that are cached, the cache is held on the **asset object** and not the connection. This means
-            that two different asset objects may not share the same cache.
 
         Returns
         -------
@@ -64,6 +64,10 @@ class AssetLike:
 
         Downloads the asset's contents and saves it to a file. This cannot be used if the asset is stateless.
 
+        .. note::
+            For assets that are cached, the cache is held on the **asset object** and not the connection. This means
+            that two different asset objects may not share the same cache.
+
         Parameters
         ----------
         fp: :class:`str`, :class:`pathlib.Path`, or file-like object
@@ -73,10 +77,6 @@ class AssetLike:
             will not download the asset again.
         seek_begin: :class:`bool`
             Whether to seek to the beginning of the file after writing. Defaults to ``True``.
-
-        .. note::
-            For assets that are cached, the cache is held on the **asset object** and not the connection. This means
-            that two different asset objects may not share the same cache.
 
         Returns
         -------

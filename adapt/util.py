@@ -4,6 +4,7 @@ from base64 import b64encode, urlsafe_b64decode
 from datetime import datetime
 from inspect import isawaitable
 from io import BufferedIOBase
+from os import getenv
 from typing import (
     Any,
     Awaitable,
@@ -18,9 +19,12 @@ from .models.enums import ModelType
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import TypeAlias
+    from typing import Literal, TypeAlias
 
     IOSource: TypeAlias = str | bytes | PathLike[Any] | BufferedIOBase
+    IS_DOCUMENTING: Literal[False] = False
+else:
+    IS_DOCUMENTING: bool = getenv('READTHEDOCS', False)
 
 __all__ = (
     'ADAPT_EPOCH_MILLIS',

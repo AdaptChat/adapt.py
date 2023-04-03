@@ -10,7 +10,7 @@ from .connection import Connection
 from .http import HTTPClient
 from .models.enums import Status
 from .server import AdaptServer
-from .util import maybe_coro, MISSING
+from .util import maybe_coro, IS_DOCUMENTING, MISSING
 from .websocket import WebSocket
 
 if TYPE_CHECKING:
@@ -90,7 +90,7 @@ class WeakEventRegistry(Generic[P, R]):
 class EventDispatcher:
     """Base class for receiving events and then dispatching them to event handlers registered on the client."""
 
-    if TYPE_CHECKING:
+    if TYPE_CHECKING or IS_DOCUMENTING:
         async def on_event(self, event: str, *args: Any, **kwargs: Any) -> None:
             """|coro|
 
@@ -203,7 +203,7 @@ class EventDispatcher:
 
         Parameters
         ----------
-        event: :class:`str:
+        event: :class:`str`
             The event to dispatch to.
         *args
             Positional arguments to pass into event handlers.
@@ -216,6 +216,9 @@ class EventDispatcher:
 
 class Client(EventDispatcher):
     """Represents a client that interacts with Adapt.
+
+    This class inherits from :class:`~.client.EventDispatcher`. See the documentation for that class for documentation
+    on event listeners.
 
     Attributes
     ----------

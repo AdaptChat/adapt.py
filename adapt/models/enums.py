@@ -101,7 +101,7 @@ class RelationshipType(Enum):
 
 
 class ChannelType(Enum):
-    """|enum
+    """|enum|
 
     The type of a channel.
 

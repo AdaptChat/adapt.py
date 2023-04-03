@@ -17,6 +17,12 @@ Server
 .. autoclass:: adapt.AdaptServer
     :members:
 
+Events
+~~~~~~
+
+.. autoclass:: adapt.client.EventDispatcher
+    :members:
+
 Event Utilities
 ~~~~~~~~~~~~~~~
 
@@ -69,16 +75,16 @@ Enums
 Standard Enums
 ~~~~~~~~~~~~~~
 
-.. autoclass:: adapt.ModelType
+.. autoclass:: adapt.ModelType()
     :members:
 
-.. autoclass:: adapt.Status
+.. autoclass:: adapt.Status()
     :members:
 
-.. autoclass:: adapt.RelationshipType
+.. autoclass:: adapt.RelationshipType()
     :members:
 
-.. autoclass:: adapt.ChannelType
+.. autoclass:: adapt.ChannelType()
     :members:
 
 Bitflag Enums

@@ -319,10 +319,10 @@ class RoleFlags(Bitflags):
         Whether the role is managed. Managed roles cannot be edited or deleted.
     mentionable: :class:`bool`
         Whether the role is mentionable.
-    default: :class:`bool`
+    default_role: :class:`bool`
         Whether the role is the default role for everyone.
     """
     hoisted = _(1 << 0)
     managed = _(1 << 1)
     mentionable = _(1 << 2)
-    default = _(1 << 3)
+    default_role = _(1 << 3)
