@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .asset import Asset
+from .bitflags import UserFlags
 from .object import AdaptObject
+from ..util import MISSING
 
 if TYPE_CHECKING:
     from typing import Any, Self
@@ -11,6 +13,7 @@ if TYPE_CHECKING:
     from .enums import RelationshipType
     from ..connection import Connection
     from ..types.user import ClientUser as RawClientUser, User as RawUser
+    from ..util import IOSource
 
 __all__ = ('ClientUser', 'User', 'Relationship')
 
@@ -81,6 +84,19 @@ class BaseUser(AdaptObject):
         """:class:`.Asset`: The user's banner."""
         return Asset(connection=self._connection, url=self._banner)
 
+    @property
+    def flags(self) -> UserFlags:
+        """:class:`.UserFlags`: The user's flags."""
+        return UserFlags(self._flags)
+
+    @property
+    def is_bot(self) -> bool:
+        """:class:`bool`: Whether the user is a bot account."""
+        return self.flags.bot
+
+    def __str__(self) -> str:
+        return self.tag
+
     def __repr__(self) -> str:
         return (
             f'<{self.__class__.__name__} id={self.id!r} username={self.username!r} '
@@ -125,6 +141,60 @@ class ClientUser(BaseUser):
     def _update(self, data: RawClientUser) -> None:
         super()._update(data)
         self.email = data['email']
+
+    async def edit(
+        self,
+        *,
+        username: str = MISSING,
+        avatar: IOSource | None = MISSING,
+        banner: IOSource | None = MISSING,
+        bio: IOSource | None = MISSING,
+    ) -> Self:
+        """|coro|
+
+        Updates the client's user information. Only the parameters passed will be updated.
+
+        Parameters
+        ----------
+        username: :class:`str`
+            The new username to use.
+        avatar: :class:`bytes`, path-like object, file-like object, or ``None``
+            The new avatar to use. If ``None``, the avatar will be removed.
+        banner: :class:`bytes`, path-like object, file-like object, or ``None``
+            The new banner to use. If ``None``, the banner will be removed.
+        bio: :class:`str` or ``None``
+            The new bio to use. If ``None``, the bio will be removed.
+        """
+        self._update(await self._connection.http.edit_authenticated_user(
+            username=username,
+            avatar=avatar,
+            banner=banner,
+            bio=bio,
+        ))
+        return self
+
+    async def delete(self, *, password: str) -> None:
+        """|coro|
+
+        Deletes the client's user account. This is irreversible.
+
+        .. note::
+            The account must be a user account; if it is a bot account, the bot account can only be deleted by the
+            user account that owns it.
+
+        Parameters
+        ----------
+        password: :class:`str`
+            The password of the user, required for security purposes.
+
+        Raises
+        ------
+        TypeError
+            The client user is a bot account.
+        """
+        if self.is_bot:
+            raise TypeError('Cannot delete a bot account.')
+        await self._connection.http.delete_authenticated_user(password=password)
 
 
 class User(BaseUser):

@@ -15,6 +15,10 @@ async def on_ready(ready):
 # Message event handler. This is called when a message is received.
 @client.event
 async def on_message(message):
+    # Ignore messages sent by bots
+    if message.author.is_bot:
+        return
+
     # If the message content is "ping", respond with "Pong!".
     if message.content == 'ping':
         await message.channel.send('Pong!')

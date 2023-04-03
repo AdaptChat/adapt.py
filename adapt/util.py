@@ -3,6 +3,7 @@ from __future__ import annotations
 from base64 import b64encode, urlsafe_b64decode
 from datetime import datetime
 from inspect import isawaitable
+from io import BufferedIOBase
 from typing import (
     Any,
     Awaitable,
@@ -10,9 +11,16 @@ from typing import (
     Final,
     ParamSpec,
     TypeVar,
+    TYPE_CHECKING,
 )
 
 from .models.enums import ModelType
+
+if TYPE_CHECKING:
+    from os import PathLike
+    from typing import TypeAlias
+
+    IOSource: TypeAlias = str | bytes | PathLike[Any] | BufferedIOBase
 
 __all__ = (
     'ADAPT_EPOCH_MILLIS',
@@ -75,10 +83,21 @@ def _get_mimetype(data: bytes) -> str:
     raise ValueError('unsupported image format')
 
 
-def _bytes_to_image_data(data: bytes) -> str:
+def _bytes_to_image_data(data: bytes, /) -> str:
     mimetype = _get_mimetype(data)
     result = b64encode(data).decode('ascii')
     return f'data:{mimetype};base64,{result}'
+
+
+def resolve_image(src: IOSource, /) -> str:
+    if isinstance(src, bytes):
+        data = src
+    elif isinstance(src, BufferedIOBase):
+        data = src.read()
+    else:
+        with open(src, 'rb') as f:
+            data = f.read()
+    return _bytes_to_image_data(data)
 
 
 def extract_user_id_from_token(token: str, /) -> int:

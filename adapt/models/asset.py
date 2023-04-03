@@ -4,10 +4,10 @@ from io import BufferedIOBase
 from typing import overload, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from os import PathLike
     from typing import Any, Literal, Self
 
     from ..connection import Connection
+    from ..util import IOSource
 
 __all__ = ('Asset',)
 
@@ -59,13 +59,7 @@ class AssetLike:
                 self._cached = data
             return data
 
-    async def save(
-        self,
-        fp: str | bytes | PathLike[Any] | BufferedIOBase,
-        *,
-        cache: bool = True,
-        seek_begin: bool = True,
-    ) -> int:
+    async def save(self, fp: IOSource, *, cache: bool = True, seek_begin: bool = True) -> int:
         """|coro|
 
         Downloads the asset's contents and saves it to a file. This cannot be used if the asset is stateless.

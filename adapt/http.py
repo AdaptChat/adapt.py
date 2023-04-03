@@ -6,7 +6,7 @@ import asyncio
 from typing import Literal, TYPE_CHECKING
 
 from .server import AdaptServer
-from .util import extract_user_id_from_token, _bytes_to_image_data, MISSING
+from .util import extract_user_id_from_token, resolve_image, MISSING
 
 if TYPE_CHECKING:
     from typing import Any, Final, TypeAlias, Self
@@ -18,6 +18,12 @@ if TYPE_CHECKING:
         GuildChannelType,
         CreateGuildChannelPayload,
         CreateDMChannelPayload,
+    )
+    from .types.message import (
+        Message,
+        CreateMessagePayload,
+        EditMessagePayload,
+        MessageHistoryQuery,
     )
     from .types.user import (
         CreateUserPayload,
@@ -31,6 +37,7 @@ if TYPE_CHECKING:
         User,
         Relationship,
     )
+    from .util import IOSource
 
 DEFAULT_API_URL: Final[str] = AdaptServer.production().api
 
@@ -137,22 +144,22 @@ class HTTPClient:
         self,
         *,
         username: str = MISSING,
-        avatar: bytes | None = MISSING,
-        banner: bytes | None = MISSING,
+        avatar: IOSource | None = MISSING,
+        banner: IOSource | None = MISSING,
         bio: str | None = MISSING,
     ) -> ClientUser:
         payload: EditUserPayload = {'username': username}
         if avatar is not MISSING:
-            payload['avatar'] = _bytes_to_image_data(avatar)
+            payload['avatar'] = resolve_image(avatar)
         if banner is not MISSING:
-            payload['banner'] = _bytes_to_image_data(banner)
+            payload['banner'] = resolve_image(banner)
         if bio is not MISSING:
             payload['bio'] = bio
 
         return await self.request('PATCH', '/users/me', json=payload)
 
-    async def delete_authenticated_user(self) -> None:
-        await self.request('DELETE', '/users/me')
+    async def delete_authenticated_user(self, *, password: str) -> None:
+        await self.request('DELETE', '/users/me', json={'password': password})
 
     async def get_relationships(self) -> list[Relationship]:
         return await self.request('GET', '/relationships')
@@ -205,6 +212,61 @@ class HTTPClient:
             'recipient_ids': recipient_ids,
         }
         return await self.request('POST', '/users/me/channels', json=payload)
+
+    # Messages
+
+    async def get_message_history(
+        self,
+        channel_id: int,
+        *,
+        before: int | None = None,
+        after: int | None = None,
+        limit: int = 100,
+        user_id: int | None = None,
+        oldest_first: bool = False,
+    ) -> list[Message]:
+        params: MessageHistoryQuery = {'oldest_first': oldest_first}
+        if before is not None:
+            params['before'] = before
+        if after is not None:
+            params['after'] = after
+        if limit is not None:
+            params['limit'] = limit
+        if user_id is not None:
+            params['user_id'] = user_id
+
+        return await self.request('GET', f'/channels/{channel_id}/messages', params=params)
+
+    async def get_message(self, channel_id: int, message_id: int) -> Message:
+        return await self.request('GET', f'/channels/{channel_id}/messages/{message_id}')
+
+    async def create_message(
+        self,
+        channel_id: int,
+        *,
+        content: str | None = None,
+        nonce: str | None = None,
+    ) -> Message:
+        payload: CreateMessagePayload = {
+            'content': content,
+            'nonce': nonce,
+        }
+        return await self.request('POST', f'/channels/{channel_id}/messages', json=payload)
+
+    async def edit_message(
+        self,
+        channel_id: int,
+        message_id: int,
+        *,
+        content: str | None = None,
+    ) -> Message:
+        payload: EditMessagePayload = {
+            'content': content,
+        }
+        return await self.request('PATCH', f'/channels/{channel_id}/messages/{message_id}', json=payload)
+
+    async def delete_message(self, channel_id: int, message_id: int) -> None:
+        await self.request('DELETE', f'/channels/{channel_id}/messages/{message_id}')
 
     async def close(self) -> None:
         await self.session.close()

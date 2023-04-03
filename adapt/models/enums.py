@@ -15,7 +15,29 @@ __all__ = (
 
 
 class ModelType(Enum):
-    """Enumeration of model types."""
+    """|enum|
+
+    Enumeration of model types.
+
+    Attributes
+    ----------
+    guild
+        The model is a :class:`Guild`.
+    user
+        The model is a :class:`User`.
+    channel
+        The model is a :class:`Channel`.
+    message
+        The model is a :class:`Message`.
+    attachment
+        The model is an :class:`Attachment`.
+    role
+        The model is a :class:`Role`.
+    internal
+        The model is an internal model.
+    unknown
+        The model type is unknown.
+    """
     guild = 0
     user = 1
     channel = 2
@@ -31,7 +53,21 @@ class ModelType(Enum):
 
 
 class Status(Enum):
-    """The status of a user's presence."""
+    """|enum|
+
+    The status of a user's presence.
+
+    Attributes
+    ----------
+    online
+        The user is online.
+    idle
+        The user is idle.
+    dnd
+        The user is has enabled Do Not Disturb.
+    offline
+        The user is offline.
+    """
     online = 'online'
     idle = 'idle'
     dnd = 'dnd'
@@ -39,7 +75,21 @@ class Status(Enum):
 
 
 class RelationshipType(Enum):
-    """The type of a relationship."""
+    """|enum|
+
+    The type of a relationship.
+
+    Attributes
+    ----------
+    friend
+        The user is your friend.
+    outgoing_request
+        You have sent a friend request to the user.
+    incoming_request
+        You have received a friend request from the user.
+    blocked
+        You have blocked the user.
+    """
     friend = 'friend'
     outgoing_request = 'outgoing_request'
     incoming_request = 'incoming_request'
@@ -51,7 +101,25 @@ class RelationshipType(Enum):
 
 
 class ChannelType(Enum):
-    """The type of a channel."""
+    """|enum
+
+    The type of a channel.
+
+    Attributes
+    ----------
+    text
+        The channel is a text channel.
+    announcement
+        The channel is an announcement channel.
+    voice
+        The channel is a voice channel.
+    category
+        The channel is a category channel.
+    dm
+        The channel is a DM channel.
+    group
+        The channel is a group DM channel.
+    """
     text = 'text'
     announcement = 'announcement'
     voice = 'voice'
