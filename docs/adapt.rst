@@ -42,17 +42,24 @@ User
     :members:
     :inherited-members:
 
-Asset
-~~~~~
-
-.. autoclass:: adapt.Asset
-    :members:
-    :inherited-members:
-
 ClientUser
 ~~~~~~~~~~
 
 .. autoclass:: adapt.ClientUser
+    :members:
+    :inherited-members:
+
+Relationship
+~~~~~~~~~~~~
+
+.. autoclass:: adapt.Relationship
+    :members:
+    :inherited-members:
+
+Asset
+~~~~~
+
+.. autoclass:: adapt.Asset
     :members:
     :inherited-members:
 

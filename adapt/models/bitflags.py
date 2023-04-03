@@ -40,7 +40,67 @@ def _create_property(member: int) -> property:
 class Bitflags:
     """The base class that all bitflag classes inherit from. This class is not meant to be used directly.
 
-    Bitflags are a way to represent multiple boolean values in a single integer. Examples o
+    Bitflags are a way to represent multiple boolean values in a single integer. This class provides a way to easily
+    read and manipulate these boolean values.
+
+    Parameters
+    ----------
+    value: :class:`int`
+        The initial bits. If not provided, the default value will be used (typically ``0`` unless specified).
+    **flags: :class:`bool`
+        The overrides for each flag. If a flag is not provided, it will be set to ``False``.
+
+    Attributes
+    ----------
+    value: :class:`int`
+        The current bits.
+
+    Examples
+    --------
+    We will use the :class:`Permissions` class as an example.
+
+    Create a new permissions instance with specific flags: ::
+
+        permissions = Permissions(view_channel=True, send_messages=True)
+
+    Create a new permissions instance with a specific value: ::
+
+        permissions = Permissions(5)  # Equivalent to Permissions(view_channel=True, send_messages=True)
+
+    Read the value of a specific flag: ::
+
+        permissions.view_channel  # True
+        permissions.add_reactions  # False
+
+    Set the value of a specific flag: ::
+
+        permissions.view_channel = False
+        permissions.view_channel  # False
+
+        # Using the `del` keyword will set the flag to False
+        del permissions.view_channel  # Equivalent to permissions.view_channel = False
+
+    Create a new permissions instance from another: ::
+
+        permissions = Permissions(view_channel=True, send_messages=True)
+        modified = permissions.copy_with(send_messages=False)
+
+        permissions.send_messages  # True
+        modified.send_messages  # False
+
+    Helper methods are also provided to make it easier to work with bitflags: ::
+
+        no_permissions = Permissions.none()  # Equivalent to Permissions(0)
+        all_permissions = Permissions.all()  # Enable all flags
+        default_permissions = Permissions.default()  # Use the default value
+
+    Turn a permissions instance into a dictionary: ::
+
+        permissions = Permissions(view_channel=True, send_messages=True)
+        dict(permissions)  # {'view_channel': True, 'send_messages': True, 'add_reactions': False, ...}
+
+        # Turn it into a list of enabled flags
+        [name for name, value in permissions if value]  # ['view_channel', 'send_messages']
     """
 
     value: int
@@ -137,6 +197,17 @@ class Bitflags:
             The new instance.
         """
         return cls(cls.__all_value__)
+
+    @classmethod
+    def default(cls) -> Self:
+        """Creates a new instance with the default flags.
+
+        Returns
+        -------
+        :class:`Bitflags`
+            The new instance.
+        """
+        return cls(cls.__default_value__)
 
     def copy_with(self, **overrides: bool) -> Self:
         """Returns a copy of this instance with the given flag overrides applied.
