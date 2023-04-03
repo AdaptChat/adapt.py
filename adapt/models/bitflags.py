@@ -16,6 +16,7 @@ __all__ = (
     'GuildFlags',
     'MessageFlags',
     'RoleFlags',
+    'Permissions',
 )
 
 _ = lambda value: cast(bool, value)
