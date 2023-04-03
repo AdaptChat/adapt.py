@@ -571,6 +571,15 @@ def once(func: EventListener[P, R]) -> EventListener[P, R]:
     """A decorator that registers an event listener to be called only once before being destroyed.
     This can be used within the client class.
 
+    Usage: ::
+
+        from adapt import Client, ReadyEvent, once
+
+        class MyClient(Client):
+            @once
+            async def on_ready(self, _event: ReadyEvent):
+                print('Ready!')
+
     Parameters
     ----------
     func: (*P.args, **P.kwargs) -> Any
@@ -580,15 +589,6 @@ def once(func: EventListener[P, R]) -> EventListener[P, R]:
     -------
     (*P.args, **P.kwargs) -> Any
         The event listener that will be called only once.
-
-    Usage: ::
-
-        from adapt import Client, ReadyEvent, once
-
-        class MyClient(Client):
-            @once
-            async def on_ready(self, _event: ReadyEvent):
-                print('Ready!')
     """
     func.__adapt_call_once__ = True
     return func
