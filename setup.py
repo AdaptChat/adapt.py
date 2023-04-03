@@ -46,9 +46,10 @@ setup(
     extras_require={
         "docs": [
             "sphinx>=4.1.1",
-            "sphinx-material",
-            'sphinx-copybutton',
-            'readthedocs-sphinx-search',
+            # "sphinx-material",
+            # 'sphinx-copybutton',
+            # 'readthedocs-sphinx-search',
+            'furo',
         ],
         "performance": ["aiohttp[speedups]", "msgpack"],
     },
