@@ -328,7 +328,9 @@ class RoleFlags(Bitflags):
 
 
 class Permissions(Bitflags):
-    """Represents a set of permissions.
+    """|bitflags|
+
+    Represents a set of permissions.
 
     Attributes
     ----------
