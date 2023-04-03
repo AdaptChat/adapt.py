@@ -9,7 +9,6 @@ Client
 
 .. autoclass:: adapt.Client
     :members:
-    :inherited-members:
 
 Server
 ~~~~~~
