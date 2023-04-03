@@ -121,7 +121,6 @@ class Bitflags:
                     setattr(cls, name, _create_property(member))
 
         cls.__valid_flags__ = valid_flags
-        cls.__default_value__ = kwargs.pop('default', 0)
         cls.__all_value__ = reduce(or_, valid_flags.values())
 
     def __init__(self, value: int = MISSING, **flags: bool):
@@ -326,3 +325,151 @@ class RoleFlags(Bitflags):
     managed = _(1 << 1)
     mentionable = _(1 << 2)
     default_role = _(1 << 3)
+
+
+class Permissions(Bitflags):
+    """Represents a set of permissions.
+
+    Attributes
+    ----------
+    view_channel: :class:`bool`
+        People with this permission can view channels and receive events from them.
+    view_message_history: :class:`bool`
+        People with this permission can view the message history of channels. The
+        `view_channel` permission is not necessarily required to view the message history,
+        however it means you cannot receive or send new messages in the channel.
+    send_messages: :class:`bool`
+        People with this permission can send messages in channels. The `view_channel`
+        permission *is* required to send messages.
+    manage_messages: :class:`bool`
+        People with this permission can manage messages sent by other people. This allows
+        for the following:
+
+        * Deleting messages sent by others
+        * Deleting attachments or embeds sent by others
+        * Removing reactions of others
+        * Unpublishing messages sent by others (Announcement channels only)
+
+        Note that anyone can still delete their own messages.
+    attach_files: :class:`bool`
+        People with this permission can attach files to messages.
+    send_embeds: :class:`bool`
+        People with this permission can send rich embeds or have embed links automatically
+        appear.
+    add_reactions: :class:`bool`
+        People with this permission can add new reactions to messages. Note that users
+        without this permission can still react to already existing reactions.
+    pin_messages: :class:`bool`
+        People with this permission can pin *and* unpin messages.
+    star_messages: :class:`bool`
+        People with this permission can star and unstar messages.
+    publish_messages: :class:`bool`
+        People with this permission can publish messages to the announcement feed.
+    modify_channels: :class:`bool`
+        People with this permission can manage settings of channels.
+    manage_channels: :class:`bool`
+        People with this permission can manage channels.
+    manage_webhooks: :class:`bool`
+        People with this permission can create, edit, and delete webhooks.
+    manage_emojis: :class:`bool`
+        People with this permission can create, edit, and delete emojis.
+    manage_starboard: :class:`bool`
+        People with this permission can delete starboard posts, or disable the starboard completely.
+    manage_guild: :class:`bool`
+        People with this permission can manage the guild's settings.
+    manage_roles: :class:`bool`
+        People with this permission can manage the guild's roles. They will be able to
+        change the permissions of any roles below their top role, and they will be forbidden to
+        grant or deny any permissions they do not have themselves. They can also assign and
+        remove any roles to other members, as long as the target role is below their top role.
+    create_invites: :class:`bool`
+        People with this permission can create invites to the guild.
+    manage_invites: :class:`bool`
+        People with this permission can revoke or pause invites of any channel in the guild.
+        This does not take into account the `create_invites` permission, meaning they can revoke
+        invites even if they cannot create them.
+    use_external_emojis: :class:`bool`
+        People with this permission can use emojis found in other servers.
+    change_nickname: :class:`bool`
+        People with this permission can change their own nickname.
+    manage_nicknames: :class:`bool`
+        People with this permission can change the nickname of other people.
+    timeout_members: :class:`bool`
+        People with this permission can timeout and untimeout members that are lower than
+        them in role hierarchy.
+    kick_members: :class:`bool`
+        People with this permission can kick members that are lower than them in role
+        hierarchy.
+    ban_members: :class:`bool`
+        People with this permission can ban and unban members that are lower than them in
+        role hierarchy.
+    bulk_delete_messages: :class:`bool`
+        People with this permission can delete or purge messages in bulk.
+        Unlike Discord, the API allows for up to any number of messages to be deleted at a time.
+    view_audit_log: :class:`bool`
+        People with this permission can view an audit log of past moderation or other
+        privileged actions.
+    privileged_mentions: :class:`bool`
+        People with this permission can mention large groups of people. This means
+        mentioning everyone under a non-mentionable role or mentioning everyone.
+    connect: :class:`bool`
+        People with this permission can connect to a voice channel.
+    speak: :class:`bool`
+        People with this permission can speak in a voice channel.
+    mute_members: :class:`bool`
+        People with this permission can mute other members in a voice channel.
+    deafen_members: :class:`bool`
+        People with this permission can deafen other members in a voice channel.
+    administrator: :class:`bool`
+        People with this permission have the ability to override all permissions and any
+        channel. This means that despite any overwrites, they will have all permissions
+        throughout the entire guild.
+    """
+    view_channel = _(1 << 0)
+    view_message_history = _(1 << 1)
+    send_messages = _(1 << 2)
+    manage_messages = _(1 << 3)
+    attach_files = _(1 << 4)
+    send_embeds = _(1 << 5)
+    add_reactions = _(1 << 6)
+    pin_messages = _(1 << 7)
+    star_messages = _(1 << 8)
+    publish_messages = _(1 << 9)
+    modify_channels = _(1 << 10)
+    manage_channels = _(1 << 11)
+    manage_webhooks = _(1 << 12)
+    manage_emojis = _(1 << 13)
+    manage_starboard = _(1 << 14)
+    manage_guild = _(1 << 15)
+    manage_roles = _(1 << 16)
+    create_invites = _(1 << 17)
+    manage_invites = _(1 << 18)
+    use_external_emojis = _(1 << 19)
+    change_nickname = _(1 << 20)
+    manage_nicknames = _(1 << 21)
+    timeout_members = _(1 << 22)
+    kick_members = _(1 << 23)
+    ban_members = _(1 << 24)
+    bulk_delete_messages = _(1 << 25)
+    view_audit_log = _(1 << 26)
+    privileged_mentions = _(1 << 27)
+    connect = _(1 << 28)
+    speak = _(1 << 29)
+    mute_members = _(1 << 30)
+    deafen_members = _(1 << 31)
+    administrator = _(1 << 32)
+
+    __default_value__ = (
+        view_channel
+        | view_message_history
+        | send_messages
+        | add_reactions
+        | star_messages
+        | attach_files
+        | send_embeds
+        | create_invites
+        | use_external_emojis
+        | change_nickname
+        | connect
+        | speak
+    )
