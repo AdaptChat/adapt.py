@@ -43,28 +43,28 @@ Object
 User
 ~~~~
 
-.. autoclass:: adapt.User
+.. autoclass:: adapt.User()
     :members:
     :inherited-members:
 
 ClientUser
 ~~~~~~~~~~
 
-.. autoclass:: adapt.ClientUser
+.. autoclass:: adapt.ClientUser()
     :members:
     :inherited-members:
 
 Relationship
 ~~~~~~~~~~~~
 
-.. autoclass:: adapt.Relationship
+.. autoclass:: adapt.Relationship()
     :members:
     :inherited-members:
 
 Asset
 ~~~~~
 
-.. autoclass:: adapt.Asset
+.. autoclass:: adapt.Asset()
     :members:
     :inherited-members:
 
