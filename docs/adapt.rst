@@ -107,6 +107,9 @@ Bitflag Enums
 .. autoclass:: adapt.RoleFlags
     :members:
 
+.. autoclass:: adapt.Permissions
+    :members:
+
 Utility Functions
 -----------------
 
