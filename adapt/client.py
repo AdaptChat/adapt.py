@@ -14,7 +14,7 @@ from .util import maybe_coro, IS_DOCUMENTING, MISSING
 from .websocket import WebSocket
 
 if TYPE_CHECKING:
-    from typing import Any, Iterable, Self, ValuesView, TypeAlias
+    from typing import Any, Generator, Iterable, Self, ValuesView, TypeAlias
 
     from .models.ready import ReadyEvent
     from .models.user import ClientUser, Relationship, User
@@ -22,7 +22,27 @@ if TYPE_CHECKING:
 
 P = ParamSpec('P')
 R = TypeVar('R')
+ClientT = TypeVar('ClientT', bound='Client')
 EventListener: TypeAlias = Callable[P, Awaitable[R] | R]
+
+
+class _CoroutineWrapper(Generic[ClientT]):
+    __slots__ = ('coro', '_client')
+
+    def __init__(self, coro: Awaitable[ClientT]) -> None:
+        self.coro = coro
+        self._client: ClientT | None = None
+
+    def __await__(self) -> Generator[Any, None, ClientT]:
+        return self.coro.__await__()
+
+    async def __aenter__(self) -> ClientT:
+        client = self._client = await self.coro
+        return await client.__aenter__()
+
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        if self._client is not None:
+            return await self._client.__aexit__(exc_type, exc, tb)
 
 
 class WeakEventRegistry(Generic[P, R]):
@@ -213,6 +233,55 @@ class EventDispatcher:
         self._dispatch_event('event', event, *args, **kwargs)
         return self._dispatch_event(event, *args, **kwargs)
 
+    async def wait_for(
+        self,
+        *events: str,
+        check: Callable[P, bool | Awaitable[bool]] | None = None,
+        timeout: float | None = None,
+    ) -> P.args:
+        """|coro|
+
+        Waits for an event to be dispatched.
+
+        Parameters
+        ----------
+        *events: :class:`str`
+            The events to listen for.
+        check: ((*P.args, **P.kwargs) -> :class:`bool`) | None
+            An event check for when to call the callback. Leave empty to not have a check.
+        timeout: :class:`float` | None
+            The amount of seconds before this listener should expire. Leave empty to not have a timeout.
+
+        Raises
+        ------
+        :exc:`asyncio.TimeoutError`
+            The event was not dispatched within the given timeout.
+
+        Returns
+        -------
+        *P.args
+            The positional arguments of the dispatched event.
+        """
+        params = asyncio.Future()
+
+        @self.listen(*events, check=check, timeout=timeout)
+        @once
+        def callback(*c_args, **c_kwargs):
+            params.set_result((c_args, c_kwargs))
+
+        try:
+            result = await asyncio.wait_for(params, timeout=timeout)
+        except asyncio.TimeoutError:
+            raise
+        else:
+            args, kwargs = result
+            if args and kwargs:
+                return result
+            elif args:
+                return args[0] if len(args) == 1 else args
+            elif kwargs:
+                return kwargs
+
 
 class Client(EventDispatcher):
     """Represents a client that interacts with Adapt.
@@ -333,6 +402,23 @@ class Client(EventDispatcher):
         """Iterable[:class:`.Relationship`]: An iterable of relationships that the client has cached."""
         return self._connection._relationships.values()
 
+    @property
+    def is_ready(self) -> bool:
+        """:class:`bool`: Whether the client has received the ready event from harmony yet."""
+        return self._connection._is_ready.done()
+
+    async def wait_until_ready(self) -> ReadyEvent:
+        """|coro|
+
+        Blocks the event loop until the client receives the ready event from harmony.
+
+        Returns
+        -------
+        :class:`.ReadyEvent`
+            The ready event that was dispatched.
+        """
+        return await self._connection._is_ready
+
     def get_user(self, user_id: int) -> User | None:
         """Retrieves a user from the cache.
 
@@ -441,7 +527,7 @@ class Client(EventDispatcher):
         return self
 
     @classmethod
-    async def from_login(
+    def from_login(
         cls,
         *,
         email: str,
@@ -449,10 +535,25 @@ class Client(EventDispatcher):
         method: TokenRetrievalMethod = 'reuse',
         server: AdaptServer = AdaptServer.production(),
         **options: Any,
-    ) -> Self:
+    ) -> _CoroutineWrapper[Self]:
         """|coro|
 
         Logs in with the specified credentials, then returns a client to interact with that account.
+
+        When using this in a context manager, ``async with await`` is unnecessary ::
+
+            # Recommended:
+            async with Client.from_login(...) as client:
+                await client.start(TOKEN)
+
+            # Unnecessary:
+            async with await Client.from_login(...) as client:
+                await client.start(TOKEN)
+
+        Otherwise, this should be treated as a coroutine: ::
+
+            client = await Client.from_login(...)
+            client.run(TOKEN)
 
         Parameters
         ----------
@@ -473,12 +574,15 @@ class Client(EventDispatcher):
         :class:`~.Client`
             The created client object.
         """
-        http = HTTPClient(**options, server_url=server.api)
-        await http.login(email=email, password=password, method=method)
-        return cls.from_http(http, server=server)
+        async def coro() -> Self:
+            http = HTTPClient(**options, server_url=server.api)
+            await http.login(email=email, password=password, method=method)
+            return cls.from_http(http, server=server)
+
+        return _CoroutineWrapper(coro())
 
     @classmethod
-    async def create_user(
+    def create_user(
         cls,
         *,
         username: str,
@@ -486,10 +590,25 @@ class Client(EventDispatcher):
         password: str,
         server: AdaptServer = AdaptServer.production(),
         **options: Any,
-    ) -> Self:
+    ) -> _CoroutineWrapper[Self]:
         """|coro|
 
         Registers a new user account, and returns a new client created to interact with that account.
+
+        When using this in a context manager, ``async with await`` is unnecessary ::
+
+            # Recommended:
+            async with Client.create_user(...) as client:
+                await client.start(TOKEN)
+
+            # Unnecessary:
+            async with await Client.create_user(...) as client:
+                await client.start(TOKEN)
+
+        Otherwise, this should be treated as a coroutine: ::
+
+            client = await Client.create_user(...)
+            client.run(TOKEN)
 
         Parameters
         ----------
@@ -510,9 +629,12 @@ class Client(EventDispatcher):
         :class:`~.Client`
             The created client object.
         """
-        http = HTTPClient(**options, server_url=server.api)
-        await http.create_user(username=username, email=email, password=password)
-        return cls.from_http(http, server=server)
+        async def coro() -> Self:
+            http = HTTPClient(**options, server_url=server.api)
+            await http.create_user(username=username, email=email, password=password)
+            return cls.from_http(http, server=server)
+
+        return _CoroutineWrapper(coro())
 
     async def start(self, token: str | None = None) -> None:
         """|coro|
