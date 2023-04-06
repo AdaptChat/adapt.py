@@ -185,7 +185,6 @@ class EventDispatcher:
         """
         def decorator(callback: EventListener[P, R]) -> EventListener[P, R]:
             nonlocal events
-            nonlocal limit
 
             events = events or (callback.__name__,)
             events = tuple(event.lower().removeprefix('on_') for event in events)
