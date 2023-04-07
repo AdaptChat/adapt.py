@@ -5,6 +5,7 @@ import asyncio
 
 from typing import Literal, TYPE_CHECKING
 
+from .polyfill import removeprefix, removesuffix
 from .server import AdaptServer
 from .util import extract_user_id_from_token, resolve_image, MISSING
 
@@ -62,7 +63,7 @@ class HTTPClient:
         self.session = session or aiohttp.ClientSession(**kwargs, loop=self.loop)
 
         self.client_id: int | None = extract_user_id_from_token(token) if token is not None else None
-        self.server_url: str = server_url.removesuffix('/')
+        self.server_url: str = removesuffix(server_url, '/')
         self._token: str | None = token
 
     @property
@@ -96,7 +97,7 @@ class HTTPClient:
         if json is not None:
             headers['Content-Type'] = 'application/json'
 
-        endpoint = '/' + endpoint.removeprefix('/')
+        endpoint = '/' + removeprefix(endpoint, '/')
         async with self.session.request(
             method,
             self.server_url + endpoint,

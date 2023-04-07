@@ -9,6 +9,7 @@ import aiohttp
 from .connection import Connection
 from .http import HTTPClient
 from .models.enums import Status
+from .polyfill import removeprefix
 from .server import AdaptServer
 from .util import maybe_coro, IS_DOCUMENTING, MISSING
 from .websocket import WebSocket
@@ -187,10 +188,10 @@ class EventDispatcher:
             nonlocal events
 
             events = events or (callback.__name__,)
-            events = tuple(event.lower().removeprefix('on_') for event in events)
+            events = tuple(removeprefix(event.lower(), 'on_') for event in events)
 
             def event_check(event: str) -> bool:
-                return event.removeprefix('on_') in events
+                return removeprefix(event, 'on_') in events
 
             self._weak_listeners.append(WeakEventRegistry(
                 self._weak_listeners,
