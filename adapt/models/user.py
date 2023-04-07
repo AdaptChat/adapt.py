@@ -15,21 +15,12 @@ if TYPE_CHECKING:
     from ..types.user import ClientUser as RawClientUser, User as RawUser
     from ..util import IOSource
 
-__all__ = ('ClientUser', 'User', 'Relationship')
+__all__ = ('ClientUser', 'PartialUser', 'User', 'Relationship')
 
 
-class BaseUser(AdaptObject):
-    __slots__ = (
-        '_connection',
-        'username',
-        'discriminator',
-        '_avatar',
-        '_banner',
-        'bio',
-        '_flags',
-    )
-
+class BaseUser:
     if TYPE_CHECKING:
+        _connection: Connection
         username: str
         discriminator: int
         _avatar: str | None
@@ -37,18 +28,18 @@ class BaseUser(AdaptObject):
         bio: str | None
         _flags: int
 
-    def __init__(self, *, connection: Connection, data: RawUser) -> None:
-        self._connection = connection
-        self._update(data)
-
     def _update(self, data: RawUser) -> None:
-        self._id = data['id']
         self.username = data['username']
         self.discriminator = data['discriminator']
         self._avatar = data['avatar']
         self._banner = data['banner']
         self.bio = data['bio']
         self._flags = data['flags']
+
+    if TYPE_CHECKING:
+        @property
+        def id(self) -> int:
+            raise NotImplementedError
 
     @property
     def padded_discriminator(self) -> str:
@@ -108,13 +99,13 @@ class BaseUser(AdaptObject):
             return self.display_name
         elif format_spec == 'u':
             return self.username
-        elif format_spec == 'm':
+        elif format_spec == '@':
             return self.mention
-        else:
-            return self.tag.__format__(format_spec)
+
+        return self.tag.__format__(format_spec)
 
 
-class ClientUser(BaseUser):
+class ClientUser(BaseUser, AdaptObject):
     """Represents the user object for the client user.
 
     Attributes
@@ -129,17 +120,27 @@ class ClientUser(BaseUser):
         The user's email.
     """
 
-    __slots__ = ('email',)
+    __slots__ = (
+        '_connection',
+        'username',
+        'discriminator',
+        '_avatar',
+        '_banner',
+        'bio',
+        '_flags',
+        'email',
+    )
 
     if TYPE_CHECKING:
         email: str
 
     def __init__(self, *, connection: Connection, data: RawClientUser) -> None:
-        super().__init__(connection=connection, data=data)
+        self._connection = connection
         self._update(data)
 
     def _update(self, data: RawClientUser) -> None:
         super()._update(data)
+        self._id = data['id']
         self.email = data['email']
 
     async def edit(
@@ -197,23 +198,21 @@ class ClientUser(BaseUser):
         await self._connection.http.delete_authenticated_user(password=password)
 
 
-class User(BaseUser):
-    """Represents an Adapt user.
+class PartialUser(AdaptObject):
+    """A partial user object which operates with only an ID.
 
-    Attributes
-    ----------
-    username: :class:`str`
-        The user's username.
-    discriminator: :class:`int`
-        The user's discriminator.
-    bio: :class:`str`
-        The user's custom bio.
+    This is useful for performing operations on users without having to fetch them first.
     """
 
-    __slots__ = ()
+    __slots__ = ('_connection',)
 
-    def __init__(self, *, connection: Connection, data: RawUser) -> None:
-        super().__init__(connection=connection, data=data)
+    def __init__(self, *, connection: Connection, id: int) -> None:
+        self._id = id
+        self._connection = connection
+
+    def _update(self, data: dict) -> None:
+        if id := data.get('id'):
+            self._id = id
 
     @property
     def relationship(self) -> Relationship | None:
@@ -222,22 +221,6 @@ class User(BaseUser):
         Returns ``None`` if no relationship exists.
         """
         return self._connection.get_relationship(self.id)
-
-    async def send_friend_request(self) -> Relationship:
-        """|coro|
-
-        Sends a friend request to this user.
-
-        Returns
-        -------
-        :class:`.Relationship`
-            The relationship created from sending the friend request.
-        """
-        relationship = await self._connection.http.send_friend_request(
-            username=self.username,
-            discriminator=self.discriminator,
-        )
-        return self._connection.update_raw_relationship(relationship)
 
     async def accept_friend_request(self) -> Relationship:
         """|coro|
@@ -326,6 +309,52 @@ class User(BaseUser):
             If this user is not a friend.
         """
         await self._delete_relationship_if_of_type(RelationshipType.friend)
+
+
+class User(BaseUser, PartialUser):
+    """Represents an Adapt user.
+
+    Attributes
+    ----------
+    username: :class:`str`
+        The user's username.
+    discriminator: :class:`int`
+        The user's discriminator.
+    bio: :class:`str`
+        The user's custom bio.
+    """
+
+    __slots__ = (
+        'username',
+        'discriminator',
+        '_avatar',
+        '_banner',
+        'bio',
+        '_flags',
+    )
+
+    def __init__(self, *, connection: Connection, data: RawUser) -> None:
+        super().__init__(connection=connection, id=data['id'])
+        self._update(data)
+
+    def _update(self, data: RawUser) -> None:
+        super(BaseUser, self)._update(data)
+
+    async def send_friend_request(self) -> Relationship:
+        """|coro|
+
+        Sends a friend request to this user.
+
+        Returns
+        -------
+        :class:`.Relationship`
+            The relationship created from sending the friend request.
+        """
+        relationship = await self._connection.http.send_friend_request(
+            username=self.username,
+            discriminator=self.discriminator,
+        )
+        return self._connection.update_raw_relationship(relationship)
 
 
 class Relationship:
