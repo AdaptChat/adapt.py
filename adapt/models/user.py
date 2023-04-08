@@ -165,6 +165,11 @@ class ClientUser(BaseUser, AdaptObject):
             The new banner to use. If ``None``, the banner will be removed.
         bio: :class:`str` or ``None``
             The new bio to use. If ``None``, the bio will be removed.
+
+        Returns
+        -------
+        :class:`.ClientUser`
+            The updated client user.
         """
         self._update(await self._connection.http.edit_authenticated_user(
             username=username,

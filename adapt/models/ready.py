@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .enums import RelationshipType
+from .guild import Guild
 from .user import ClientUser, User, Relationship
 
 if TYPE_CHECKING:
@@ -49,10 +50,10 @@ class ReadyEvent:
     _connection: Connection
     session_id: str
     user: ClientUser
+    guilds: list[Guild]
     relationships: list[Relationship]
 
-    # TODO:
-    guilds: list[Guild]
+    # TODO
     dm_channels: list[DMChannel]
     presences: list[Presence]
 
@@ -61,8 +62,9 @@ class ReadyEvent:
         self.session_id = data['session_id']
 
         self.user = connection.user = ClientUser(connection=connection, data=data['user'])
+        # Slight optimization to avoid unnecessary updates if users are already cached
         relationships: list[Relationship] = []
-        seen: set[int] = set()
+        seen: set[int] = set(connection._users)
 
         for relationship in data['relationships']:
             user_data = relationship['user']
@@ -76,6 +78,7 @@ class ReadyEvent:
             relationships.append(full)
 
         self.relationships = relationships
+        self.guilds = [self._connection.add_raw_guild(guild) for guild in data['guilds']]
 
     def __repr__(self) -> str:
         return f'<ReadyEvent session_id={self.session_id!r} user={self.user!r}>'

@@ -9,6 +9,8 @@ import aiohttp
 from .connection import Connection
 from .http import HTTPClient
 from .models.enums import Status
+from .models.guild import PartialGuild
+from .models.user import PartialUser
 from .polyfill import removeprefix
 from .server import AdaptServer
 from .util import maybe_coro, IS_DOCUMENTING, MISSING
@@ -18,8 +20,10 @@ if TYPE_CHECKING:
     from typing import Any, Generator, Iterable, Self, ValuesView, TypeAlias
 
     from .models.ready import ReadyEvent
+    from .models.guild import Guild
     from .models.user import ClientUser, Relationship, User
     from .types.user import TokenRetrievalMethod
+    from .util import IOSource
 
 P = ParamSpec('P')
 R = TypeVar('R')
@@ -398,6 +402,11 @@ class Client(EventDispatcher):
         return self._connection._users.values()
 
     @property
+    def guilds(self) -> ValuesView[Guild]:
+        """Iterable[:class:`.Guild`]: An iterable of guilds that the client has cached."""
+        return self._connection._guilds.values()
+
+    @property
     def relationships(self) -> ValuesView[Relationship]:
         """Iterable[:class:`.Relationship`]: An iterable of relationships that the client has cached."""
         return self._connection._relationships.values()
@@ -434,6 +443,24 @@ class Client(EventDispatcher):
         """
         return self._connection.get_user(user_id)
 
+    def get_partial_user(self, user_id: int) -> PartialUser:
+        """Creates a usable partial user object that operates with only its ID.
+
+        This is useful for when you want to perform actions on a user without having to ensure they are cached
+        or fetch unnecessary user data.
+
+        Parameters
+        ----------
+        user_id: :class:`int`
+            The user ID to create the partial user with.
+
+        Returns
+        -------
+        :class:`.PartialUser`
+            The partial user object that was created.
+        """
+        return PartialUser(connection=self._connection, id=user_id)
+
     async def fetch_user(self, user_id: int, *, respect_cache: bool = False) -> User:
         """|coro|
 
@@ -454,8 +481,7 @@ class Client(EventDispatcher):
         if cached := respect_cache and self.get_user(user_id):
             return cached
 
-        user = self._connection.add_raw_user(await self.http.get_user(user_id))
-        return user
+        return self._connection.add_raw_user(await self.http.get_user(user_id))
 
     def get_relationship(self, user_id: int) -> Relationship | None:
         """Retrieves the relationship between the client and the user with the given ID from the cache.
@@ -485,6 +511,152 @@ class Client(EventDispatcher):
         """
         relationships = await self.http.get_relationships()
         return map(self._connection.update_raw_relationship, relationships)
+
+    def get_guild(self, guild_id: int) -> Guild | None:
+        """Retrieves a guild from the cache.
+
+        Parameters
+        ----------
+        guild_id: :class:`int`
+            The guild ID to retrieve.
+
+        Returns
+        -------
+        :class:`.Guild` | None
+            The guild object that was retrieved, or ``None`` if no guild was found.
+        """
+        return self._connection.get_guild(guild_id)
+
+    def get_partial_guild(self, guild_id: int) -> PartialGuild:
+        """Creates a usable partial guild object that operates with only its ID.
+
+        This is useful for when you want to perform actions on a guild without having to ensure it is cached
+        or fetch unnecessary guild data.
+
+        Parameters
+        ----------
+        guild_id: :class:`int`
+            The guild ID to create the partial guild with.
+
+        Returns
+        -------
+        :class:`.PartialGuild`
+            The partial guild object that was created.
+        """
+        return PartialGuild(connection=self._connection, id=guild_id)
+
+    async def fetch_guild(
+        self,
+        guild_id: int,
+        *,
+        respect_cache: bool = False,
+        channels: bool = False,
+        members: bool = False,
+        roles: bool = False,
+    ) -> Guild:
+        """|coro|
+
+        Fetches a guild directly from the API.
+
+        Parameters
+        ----------
+        guild_id: :class:`int`
+            The guild ID to fetch.
+        respect_cache: :class:`bool`
+            If ``True``, if the guild is found in the cache, it will be returned instead of fetching from the API.
+            This will also mean the ``members``, ``roles``, and ``channels`` parameters will be ignored.
+        channels: :class:`bool`
+            If ``True``, the guild's channels will be fetched.
+        members: :class:`bool`
+            If ``True``, the guild's members will be fetched.
+        roles: :class:`bool`
+            If ``True``, the guild's roles will be fetched.
+
+        Returns
+        -------
+        :class:`.Guild`
+            The guild object that was fetched.
+        """
+        if cached := respect_cache and self.get_guild(guild_id):
+            return cached
+
+        return self._connection.add_raw_guild(
+            await self.http.get_guild(guild_id, channels=channels, members=members, roles=roles),
+        )
+
+    async def fetch_guilds(
+        self, *, channels: bool = False, members: bool = False, roles: bool = False,
+    ) -> Iterable[Guild]:
+        """|coro|
+
+        Fetches all guilds that the client is a member of.
+
+        .. warning::
+            This is an expensive process and has high ratelimits, so it should be used sparingly.
+            Guild data is returned by the ready event, so it is usually unnecessary to call this method.
+
+        Parameters
+        ----------
+        channels: :class:`bool`
+            If ``True``, channel data will be fetched for each guild.
+        members: :class:`bool`
+            If ``True``, member data will be fetched for each guild.
+        roles: :class:`bool`
+            If ``True``, role data will be fetched for each guild.
+
+        Returns
+        -------
+        Iterable[:class:`.Guild`]
+            An iterable of guild objects that were fetched. This is a generator that lazily resolves the
+            guilds into :class:`.Guild` objects.
+        """
+        guilds = await self.http.get_guilds(channels=channels, members=members, roles=roles)
+        return map(self._connection.add_raw_guild, guilds)
+
+    async def create_guild(
+        self,
+        *,
+        name: str,
+        description: str | None = None,
+        icon: IOSource | None = None,
+        banner: IOSource | None = None,
+        public: bool = False,
+        nonce: str | None = None,
+    ) -> Guild:
+        """|coro|
+
+        Creates a new guild.
+
+        Parameters
+        ----------
+        name: :class:`str`
+            The name of the guild.
+        description: :class:`str`
+            The description of the guild. This is optional.
+        icon: :class:`bytes`, path-like object, file-like object, or ``None``
+            The icon of the guild. This is optional.
+        banner: :class:`bytes`, path-like object, file-like object, or ``None``
+            The banner of the guild. This is optional.
+        public: :class:`bool`
+            Whether the guild should be public. Defaults to ``False``.
+        nonce: :class:`str`
+            An optional nonce for integrity. When the guild creation event is received through the websocket, the nonce
+            will be included in the payload. This can be used to verify that the guild was created successfully.
+
+        Returns
+        -------
+        :class:`.Guild`
+            The guild that was created.
+        """
+        data = await self.http.create_guild(
+            name=name,
+            description=description,
+            icon=icon,
+            banner=banner,
+            public=public,
+            nonce=nonce,
+        )
+        return self._connection.add_raw_guild(data)
 
     async def update_presence(self, *, status: Status = MISSING) -> None:
         """|coro|

@@ -4,6 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from .models.enums import RelationshipType, Status
+from .models.guild import Guild
 from .models.ready import ReadyEvent
 from .models.user import ClientUser, Relationship, User
 from .server import AdaptServer
@@ -12,8 +13,15 @@ if TYPE_CHECKING:
     from typing import Any
 
     from .http import HTTPClient
+    from .types.guild import Guild as RawGuild
     from .types.user import User as RawUser, Relationship as RawRelationship
-    from .types.ws import InboundMessage, ReadyEvent as RawReadyEvent
+    from .types.ws import (
+        InboundMessage,
+        ReadyEvent as RawReadyEvent,
+        UserUpdateEvent,
+        GuildCreateEvent,
+        GuildUpdateEvent,
+    )
     from .websocket import Dispatcher
 
 __all__ = ('Connection',)
@@ -42,7 +50,7 @@ class Connection:
         _users: dict[int, User]
         _relationships: dict[int, Relationship]
         _channels: dict[int, Any]  # TODO Channel type
-        _guilds: dict[int, Any]  # TODO Guild type
+        _guilds: dict[int, Guild]
 
     def __init__(
         self,
@@ -106,6 +114,20 @@ class Connection:
         self.add_raw_user(user := data['user'])
         return self.update_relationship(user_id=user['id'], type=RelationshipType(data['type']))
 
+    def get_guild(self, guild_id: int) -> Guild | None:
+        return self._guilds.get(guild_id)
+
+    def add_guild(self, guild: Guild) -> Guild:
+        self._guilds[guild.id] = guild
+        return guild
+
+    def add_raw_guild(self, data: RawGuild) -> Guild:
+        if guild := self.get_guild(data['id']):
+            guild._update(data)
+            return guild
+
+        return self.add_guild(Guild(connection=self, data=data))
+
     def process_event(self, data: InboundMessage) -> None:
         event: str = data['event']
         data: dict[str, Any] = data.get('data')
@@ -120,3 +142,20 @@ class Connection:
             self._is_ready.set_result(ready)
 
         self.dispatch('ready', ready)
+
+    def _handle_user_update(self, data: UserUpdateEvent) -> None:
+        before = User(connection=self, data=data['before'])
+        user = self.add_raw_user(data['after'])
+
+        self.dispatch('user_update', before, user)
+
+    def _handle_guild_create(self, data: GuildCreateEvent) -> None:
+        guild = self.add_raw_guild(data['guild'])
+        self.dispatch('guild_create', guild)  # TODO: dispatch nonce
+
+    def _handle_guild_update(self, data: GuildUpdateEvent) -> None:
+        before = Guild(connection=self, data=data['before'])
+        if guild := self._guilds.get(before.id):
+            guild._update(data['after'])
+
+        self.dispatch('guild_update', before, guild)

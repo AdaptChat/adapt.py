@@ -43,3 +43,27 @@ class Guild(PartialGuild):
     members: list[Member] | None
     roles: list[Role] | None
     channel: list[GuildChannel] | None
+
+
+class _CreateGuildPayloadRequired(TypedDict):
+    name: str
+
+
+class CreateGuildPayload(_CreateGuildPayloadRequired, total=False):
+    description: str | None
+    icon: str | None
+    banner: str | None
+    public: bool
+    nonce: str | None
+
+
+class EditGuildPayload(TypedDict, total=False):
+    name: str | None
+    description: str | None
+    icon: str | None
+    banner: str | None
+    public: bool | None
+
+
+class DeleteGuildPayload(TypedDict):
+    password: str

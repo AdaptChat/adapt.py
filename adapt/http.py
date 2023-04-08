@@ -20,6 +20,13 @@ if TYPE_CHECKING:
         CreateGuildChannelPayload,
         CreateDMChannelPayload,
     )
+    from .types.guild import (
+        Guild,
+        PartialGuild,
+        CreateGuildPayload,
+        EditGuildPayload,
+        DeleteGuildPayload,
+    )
     from .types.message import (
         Message,
         CreateMessagePayload,
@@ -268,6 +275,76 @@ class HTTPClient:
 
     async def delete_message(self, channel_id: int, message_id: int) -> None:
         await self.request('DELETE', f'/channels/{channel_id}/messages/{message_id}')
+
+    # Guilds
+
+    async def get_guilds(self, *, channels: bool = False, members: bool = False, roles: bool = False) -> list[Guild]:
+        return await self.request('GET', '/guilds', params={'channels': channels, 'members': members, 'roles': roles})
+
+    async def get_guild(
+        self,
+        guild_id: int,
+        *,
+        channels: bool = False,
+        members: bool = False,
+        roles: bool = False,
+    ) -> Guild:
+        return await self.request(
+            'GET',
+            f'/guilds/{guild_id}',
+            params={'channels': channels, 'members': members, 'roles': roles},
+        )
+
+    async def create_guild(
+        self,
+        *,
+        name: str,
+        description: str | None = None,
+        icon: IOSource | None = None,
+        banner: IOSource | None = None,
+        public: bool = False,
+        nonce: str | None = None,
+    ) -> Guild:
+        payload: CreateGuildPayload = {
+            'name': name,
+            'description': description,
+            'public': public,
+            'nonce': nonce,
+        }
+        if icon is not None:
+            payload['icon'] = resolve_image(icon)
+        if banner is not None:
+            payload['banner'] = resolve_image(banner)
+
+        return await self.request('POST', '/guilds', json=payload)
+
+    async def edit_guild(
+        self,
+        guild_id: int,
+        *,
+        name: str = MISSING,
+        description: str | None = MISSING,
+        icon: IOSource | None = MISSING,
+        banner: IOSource | None = MISSING,
+        public: bool = MISSING,
+    ) -> PartialGuild:
+        payload: EditGuildPayload = {}
+        if name is not MISSING:
+            payload['name'] = name
+        if description is not MISSING:
+            payload['description'] = description
+        if icon is not MISSING:
+            payload['icon'] = resolve_image(icon)
+        if banner is not MISSING:
+            payload['banner'] = resolve_image(banner)
+        if public is not MISSING:
+            payload['public'] = public
+
+        return await self.request('PATCH', f'/guilds/{guild_id}', json=payload)
+
+    async def delete_guild(self, guild_id: int, *, password: str = MISSING) -> None:
+        payload: DeleteGuildPayload | None = None if password is MISSING else {'password': password}
+        await self.request('DELETE', f'/guilds/{guild_id}', json=payload)
 
     async def close(self) -> None:
         await self.session.close()
