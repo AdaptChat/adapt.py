@@ -54,10 +54,31 @@ ClientUser
     :members:
     :inherited-members:
 
+PartialUser
+~~~~~~~~~~~
+
+.. autoclass:: adapt.PartialUser()
+    :members:
+    :inherited-members:
+
 Relationship
 ~~~~~~~~~~~~
 
 .. autoclass:: adapt.Relationship()
+    :members:
+    :inherited-members:
+
+Guild
+~~~~~
+
+.. autoclass:: adapt.Guild()
+    :members:
+    :inherited-members:
+
+PartialGuild
+~~~~~~~~~~~~
+
+.. autoclass:: adapt.PartialGuild()
     :members:
     :inherited-members:
 
