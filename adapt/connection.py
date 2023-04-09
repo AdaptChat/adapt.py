@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from .models.channel import DMChannel
 from .models.enums import RelationshipType, Status
 from .models.guild import Guild
 from .models.ready import ReadyEvent
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from .http import HTTPClient
+    from .types.channel import DMChannel as RawDMChannel
     from .types.guild import Guild as RawGuild
     from .types.user import User as RawUser, Relationship as RawRelationship
     from .types.ws import (
@@ -42,14 +44,14 @@ class Connection:
         '_max_message_count',
         '_users',
         '_relationships',
-        '_channels',
+        '_dm_channels',
         '_guilds',
     )
 
     if TYPE_CHECKING:
         _users: dict[int, User]
         _relationships: dict[int, Relationship]
-        _channels: dict[int, Any]  # TODO Channel type
+        _dm_channels: dict[int, DMChannel]  # TODO DMChannel
         _guilds: dict[int, Guild]
 
     def __init__(
@@ -75,14 +77,14 @@ class Connection:
 
         self._users = {}
         self._relationships = {}
-        self._channels = {}
+        self._dm_channels = {}
         self._guilds = {}
 
     def invalidate_caches(self) -> None:
         """Clears the internal caches of the connection."""
         self._users.clear()
         self._relationships.clear()
-        self._channels.clear()
+        self._dm_channels.clear()
         self._guilds.clear()
 
     def get_user(self, user_id: int) -> User | None:
@@ -127,6 +129,20 @@ class Connection:
             return guild
 
         return self.add_guild(Guild(connection=self, data=data))
+
+    def get_dm_channel(self, channel_id: int) -> DMChannel | None:
+        return self._dm_channels.get(channel_id)
+
+    def add_dm_channel(self, channel: DMChannel) -> DMChannel:
+        self._dm_channels[channel.id] = channel
+        return channel
+
+    def add_raw_dm_channel(self, data: RawDMChannel) -> DMChannel:
+        if channel := self.get_dm_channel(data['id']):
+            channel._update(data)
+            return channel
+
+        return self.add_dm_channel(DMChannel(connection=self, data=data))
 
     def process_event(self, data: InboundMessage) -> None:
         event: str = data['event']

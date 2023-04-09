@@ -4,12 +4,14 @@ from typing import TYPE_CHECKING
 
 from .asset import Asset
 from .bitflags import UserFlags
+from .channel import Messageable
 from .object import AdaptObject
-from ..util import MISSING
+from ..util import find, MISSING
 
 if TYPE_CHECKING:
     from typing import Any, Self
 
+    from .channel import DMChannel
     from .enums import RelationshipType
     from ..connection import Connection
     from ..types.user import ClientUser as RawClientUser, User as RawUser
@@ -203,21 +205,46 @@ class ClientUser(BaseUser, AdaptObject):
         await self._connection.http.delete_authenticated_user(password=password)
 
 
-class PartialUser(AdaptObject):
+class PartialUser(AdaptObject, Messageable):
     """A partial user object which operates with only an ID.
 
     This is useful for performing operations on users without having to fetch them first.
     """
 
-    __slots__ = ('_connection',)
+    __slots__ = ('_connection', '_dm_channel_id')
 
     def __init__(self, *, connection: Connection, id: int) -> None:
         self._id = id
         self._connection = connection
+        self._dm_channel_id: int | None = None
 
     def _update(self, data: dict) -> None:
         if id := data.get('id'):
             self._id = id
+
+    @property
+    def dm_channel(self) -> DMChannel | None:
+        """:class:`.DMChannel`: The DM channel with this user, if it exists in the cache."""
+        return self._connection.get_dm_channel(self._dm_channel_id)
+
+    async def create_dm(self) -> DMChannel:
+        """|coro|
+
+        Creates a DM channel with this user. This makes the API call despite whether a DM channel already exists.
+
+        Returns
+        -------
+        :class:`.DMChannel`
+            The DM channel created.
+        """
+        channel = await self._connection.http.create_user_dm_channel(self.id)
+        self._dm_channel = resolved = self._connection.add_raw_dm_channel(channel)
+        return resolved
+
+    async def _get_channel_id(self) -> int:
+        if self.dm_channel is None:
+            await self.create_dm()
+        return self.dm_channel.id
 
     @property
     def relationship(self) -> Relationship | None:
@@ -343,7 +370,7 @@ class User(BaseUser, PartialUser):
         self._update(data)
 
     def _update(self, data: RawUser) -> None:
-        super(BaseUser, self)._update(data)
+        BaseUser._update(self, data)
 
     async def send_friend_request(self) -> Relationship:
         """|coro|

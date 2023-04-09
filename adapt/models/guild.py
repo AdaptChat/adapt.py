@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import NamedTuple, TYPE_CHECKING
+from typing import cast, NamedTuple, TYPE_CHECKING
 
 from .asset import Asset
 from .bitflags import GuildFlags
@@ -11,10 +11,10 @@ if TYPE_CHECKING:
     from typing import Self
 
     from ..connection import Connection
-    from ..types.guild import PartialGuild as RawPartialGuild, Guild as RawGuild
+    from ..types.guild import PartialGuild as RawPartialGuild, Guild as RawGuild, Member as RawMember
     from ..util import IOSource
 
-__all__ = ('PartialGuild',)
+__all__ = ('PartialGuild', 'Guild')
 
 
 class PartialGuild(AdaptObject):
@@ -95,10 +95,28 @@ class PartialGuild(AdaptObject):
         return f'<PartialGuild id={self.id}>'
 
 
-class _GuildIntegrity(NamedTuple):
-    members: bool = False
-    roles: bool = False
-    channels: bool = False
+class _GuildIntegrity:
+    __slots__ = ('_members', '_roles', '_channels')
+
+    def __init__(self) -> None:
+        self._members: bool = False
+        self._roles: bool = False
+        self._channels: bool = False
+
+    @property
+    def members(self) -> bool:
+        """:class:`bool`: Whether the guild's members are cached."""
+        return self._members
+
+    @property
+    def roles(self) -> bool:
+        """:class:`bool`: Whether the guild's roles are cached."""
+        return self._roles
+
+    @property
+    def channels(self) -> bool:
+        """:class:`bool`: Whether the guild's channels are cached."""
+        return self._channels
 
 
 class Guild(PartialGuild):
@@ -128,19 +146,19 @@ class Guild(PartialGuild):
         '_members',
         '_roles',
         '_channels',
-        '__integrity',
+        '_integrity',
     )
 
     def __init__(self, *, connection: Connection, data: RawPartialGuild | RawGuild) -> None:
         self._members: dict[int, Member] = {}
         self._roles: dict[int, Role] = {}
         self._channels: dict[int, GuildChannel] = {}
-        self.__integrity: _GuildIntegrity = _GuildIntegrity()
+        self._integrity: _GuildIntegrity = _GuildIntegrity()
 
         super().__init__(connection=connection, id=data['id'])
-        self._update(data)
+        self._update(cast('RawGuild', data))
 
-    def _update(self, data: RawPartialGuild | RawGuild) -> None:
+    def _update(self, data: RawGuild) -> None:
         super()._update(data)
         self.name = data['name']
         self.description = data['description']
@@ -149,6 +167,35 @@ class Guild(PartialGuild):
         self.owner_id = data['owner_id']
         self._flags = data['flags']
         self.vanity_code = data['vanity_url']
+
+        if members := data.get('members'):
+            for member in members:
+                self._add_raw_member(member)
+            self._integrity._members = True
+
+    def _add_member(self, member: Member) -> Member:
+        self._members[member.id] = member
+        return member
+
+    def _add_raw_member(self, data: RawMember) -> Member:
+        if member := self._members.get(data['id']):
+            member._update(data)
+            return member
+
+        member = ...  # TODO
+        return self._add_member(member)
+
+    @property
+    def cache_integrity(self) -> _GuildIntegrity:
+        """Returns the integrity of the guild's cache.
+
+        This is a :class:`.NamedTuple` with the following boolean attributes:
+
+        - ``members``: Whether the guild's members are cached.
+        - ``roles``: Whether the guild's roles are cached.
+        - ``channels``: Whether the guild's channels are cached.
+        """
+        return self._integrity
 
     @property
     def icon(self) -> Asset:
@@ -174,6 +221,11 @@ class Guild(PartialGuild):
     def verified(self) -> bool:
         """:class:`bool`: Whether the guild is verified."""
         return self.flags.verified
+
+    @property
+    def owner(self) -> Member | None:
+        """:class:`.Member` | None: The resolved member object of the guild owner, if available in cache."""
+        return self._members.get(self.owner_id)
 
     async def edit(
         self,
@@ -206,9 +258,9 @@ class Guild(PartialGuild):
         :class:`.Guild`
             The updated guild object.
         """
-        self._update(await self._perform_edit(
+        self._update(cast('RawGuild', await self._perform_edit(
             name=name, description=description, icon=icon, banner=banner, public=public,
-        ))
+        )))
         return self
 
     def __str__(self) -> str:

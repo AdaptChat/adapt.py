@@ -19,7 +19,7 @@ from .models.enums import ModelType
 
 if TYPE_CHECKING:
     from os import PathLike
-    from typing import Literal, TypeAlias
+    from typing import Iterable, Literal, TypeAlias
 
     IOSource: TypeAlias = str | bytes | PathLike[Any] | BufferedIOBase
     IS_DOCUMENTING: Literal[False] = False
@@ -33,9 +33,10 @@ __all__ = (
     'extract_user_id_from_token',
     'snowflake_model_type',
     'snowflake_time',
+    'find',
 )
 
-T = TypeVar('T', bound='Ratelimiter')
+T = TypeVar('T')
 P = ParamSpec('P')
 R = TypeVar('R')
 
@@ -155,3 +156,24 @@ def snowflake_model_type(snowflake: int, /) -> ModelType:
         The model type associated with the snowflake.
     """
     return ModelType((snowflake >> 13) & 0b11111)
+
+
+def find(iterable: Iterable[T], /, *, predicate: Callable[[T], bool]) -> T | None:
+    """Finds the first element in an iterable that satisfies the given predicate.
+
+    Parameters
+    ----------
+    iterable: Iterable[T]
+        The iterable to search through.
+    predicate: (item: T) -> :class:`bool`
+        The predicate to use to find the element.
+
+    Returns
+    -------
+    T | None
+        The first element that satisfies the predicate, or ``None`` if no such element is found.
+    """
+    for item in iterable:
+        if predicate(item):
+            return item
+    return None
