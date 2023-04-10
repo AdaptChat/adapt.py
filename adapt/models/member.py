@@ -56,8 +56,8 @@ class PartialMember(PartialUser, PartialMemberMixin):
     if TYPE_CHECKING:
         guild: PartialGuild
 
-    def __init__(self, *, connection: Connection, guild: PartialGuild, member_id: int) -> None:
-        super().__init__(connection, user_id=member_id)
+    def __init__(self, *, connection: Connection, guild: PartialGuild, id: int) -> None:
+        super().__init__(connection=connection, id=id)
         self.guild = guild
 
     def __repr__(self) -> str:

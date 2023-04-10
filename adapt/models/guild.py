@@ -61,7 +61,7 @@ class PartialGuild(AdaptObject):
         """
         from .member import PartialMember
 
-        return PartialMember(connection=self._connection, guild=self, member_id=member_id)
+        return PartialMember(connection=self._connection, guild=self, id=member_id)
 
     async def _perform_edit(self, **kwargs) -> RawPartialGuild:
         return await self._connection.http.edit_guild(self.id, **kwargs)
