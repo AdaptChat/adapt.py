@@ -27,6 +27,15 @@ class GuildMemberCount(TypedDict):
     online: int | None
 
 
+class EditOwnMemberPayload(TypedDict, total=False):
+    nick: str | None
+
+
+class EditMemberPayload(TypedDict, total=False):
+    nick: str | None
+    roles: list[Snowflake] | None
+
+
 class PartialGuild(TypedDict):
     id: int
     name: str

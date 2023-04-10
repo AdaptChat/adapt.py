@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC
 from collections.abc import Hashable
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import Protocol, TYPE_CHECKING
 
 from .enums import ModelType
 from ..util import snowflake_model_type, snowflake_time
@@ -16,6 +16,20 @@ __all__ = (
     'AdaptObject',
     'Object',
 )
+
+
+class ObjectLike(Protocol):
+    __slots__ = ()
+
+    @property
+    def id(self) -> int:
+        ...
+
+    def __eq__(self, other: Self) -> bool:
+        ...
+
+    def __hash__(self) -> int:
+        ...
 
 
 class BaseObject(Hashable, ABC):

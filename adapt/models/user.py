@@ -5,8 +5,9 @@ from typing import TYPE_CHECKING
 from .asset import Asset
 from .bitflags import UserFlags
 from .channel import Messageable
+from .enums import ChannelType
 from .object import AdaptObject
-from ..util import find, MISSING
+from ..util import deprecated, find, MISSING
 
 if TYPE_CHECKING:
     from typing import Any, Self
@@ -42,6 +43,19 @@ class BaseUser:
         @property
         def id(self) -> int:
             raise NotImplementedError
+
+    @property
+    @deprecated(
+        use='username',
+        reason='This property is officially named "username" and it is a good practice to use that instead of "name".',
+    )
+    def name(self) -> str:
+        """:class:`str`: The user's username. This is an alias for :attr:`username`.
+
+        .. deprecated:: 0.1.0
+            This property is officially named :attr:`username` and it is a good practice to use that instead of "name".
+        """
+        return self.username
 
     @property
     def padded_discriminator(self) -> str:
@@ -225,7 +239,15 @@ class PartialUser(AdaptObject, Messageable):
     @property
     def dm_channel(self) -> DMChannel | None:
         """:class:`.DMChannel`: The DM channel with this user, if it exists in the cache."""
-        return self._connection.get_dm_channel(self._dm_channel_id)
+        if self._dm_channel_id:
+            return self._connection.get_dm_channel(self._dm_channel_id)
+
+        if found := find(
+            self._connection._dm_channels.values(),
+            lambda dm: dm.type is ChannelType.dm and dm.recipient == self,
+        ):
+            self._dm_channel_id = found.id
+            return found
 
     async def create_dm(self) -> DMChannel:
         """|coro|
@@ -238,13 +260,14 @@ class PartialUser(AdaptObject, Messageable):
             The DM channel created.
         """
         channel = await self._connection.http.create_user_dm_channel(self.id)
-        self._dm_channel = resolved = self._connection.add_raw_dm_channel(channel)
+        resolved = self._connection.add_raw_dm_channel(channel)
+        self._dm_channel_id = resolved.id
         return resolved
 
     async def _get_channel_id(self) -> int:
         if self.dm_channel is None:
             await self.create_dm()
-        return self.dm_channel.id
+        return self._dm_channel_id
 
     @property
     def relationship(self) -> Relationship | None:

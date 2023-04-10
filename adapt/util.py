@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import warnings
 from base64 import b64encode, urlsafe_b64decode
 from datetime import datetime
+from functools import wraps
 from inspect import isawaitable
 from io import BufferedIOBase
 from os import getenv
@@ -105,6 +107,44 @@ def resolve_image(src: IOSource, /) -> str:
     return _bytes_to_image_data(data)
 
 
+def deprecated(
+    *,
+    since: str = MISSING,
+    removed_in: str = MISSING,
+    use: str,
+    reason: str = MISSING,
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+    def decorator(func: Callable[P, T]) -> Callable[P, T]:
+        @wraps(func)
+        def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+            warnings.simplefilter('always', DeprecationWarning)
+
+            fmt = (
+                '{0.__qualname__} is deprecated'
+                if since is MISSING
+                else '{0.__qualname__} was deprecated since v{since}'
+            )
+            if removed_in is not MISSING:
+                fmt += ' and will be removed in v{removed_in}'
+
+            fmt += '. Use {use} instead.'
+            if reason is not MISSING:
+                fmt += ' {reason}'
+
+            message = fmt.format(func, since=since, removed_in=removed_in, use=use, reason=reason)
+            warnings.warn(message, DeprecationWarning, stacklevel=3)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+def parse_datetime(iso: str, /) -> datetime:
+    # fromisoformat does not support the Z timezone with fractional seconds
+    return datetime.fromisoformat(iso.replace('Z', '+00:00'))
+
+
 def extract_user_id_from_token(token: str, /) -> int:
     """Extracts the user ID associated with the given authentication token.
 
@@ -158,7 +198,7 @@ def snowflake_model_type(snowflake: int, /) -> ModelType:
     return ModelType((snowflake >> 13) & 0b11111)
 
 
-def find(iterable: Iterable[T], /, *, predicate: Callable[[T], bool]) -> T | None:
+def find(iterable: Iterable[T], predicate: Callable[[T], bool]) -> T | None:
     """Finds the first element in an iterable that satisfies the given predicate.
 
     Parameters

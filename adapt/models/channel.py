@@ -51,7 +51,7 @@ class Messageable(ABC):
         channel_id = await self._get_channel_id()
         return await self._connection.http.get_message(channel_id, message_id)
 
-    async def send(self, content: str = MISSING, *, nonce: str = MISSING) -> Message:
+    async def send(self, content: str | None = None, *, nonce: str | None = None) -> Message:
         """|coro|
 
         Sends a message to the channel.

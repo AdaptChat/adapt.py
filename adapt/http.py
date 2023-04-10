@@ -26,6 +26,8 @@ if TYPE_CHECKING:
         CreateGuildPayload,
         EditGuildPayload,
         DeleteGuildPayload,
+        Member,
+        EditMemberPayload,
     )
     from .types.message import (
         Message,
@@ -345,6 +347,42 @@ class HTTPClient:
     async def delete_guild(self, guild_id: int, *, password: str = MISSING) -> None:
         payload: DeleteGuildPayload | None = None if password is MISSING else {'password': password}
         await self.request('DELETE', f'/guilds/{guild_id}', json=payload)
+
+    # Members
+
+    async def get_members(self, guild_id: int) -> list[Member]:
+        return await self.request('GET', f'/guilds/{guild_id}/members')
+
+    async def get_member(self, guild_id: int, member_id: int) -> Member:
+        return await self.request('GET', f'/guilds/{guild_id}/members/{member_id}')
+
+    async def get_own_member(self, guild_id: int) -> Member:
+        return await self.request('GET', f'/guilds/{guild_id}/members/me')
+
+    async def edit_own_member(self, guild_id: int, *, nick: str | None = MISSING) -> Member:
+        return await self.request('PATCH', f'/guilds/{guild_id}/members/me', json={'nick': nick})
+
+    async def edit_member(
+        self,
+        guild_id: int,
+        member_id: int,
+        *,
+        nick: str | None = MISSING,
+        roles: list[int] = MISSING,
+    ) -> Member:
+        payload: EditMemberPayload = {}
+        if nick is not MISSING:
+            payload['nick'] = nick
+        if roles is not MISSING:
+            payload['roles'] = roles
+
+        return await self.request('PATCH', f'/guilds/{guild_id}/members/{member_id}', json=payload)
+
+    async def kick_member(self, guild_id: int, member_id: int) -> None:
+        await self.request('DELETE', f'/guilds/{guild_id}/members/{member_id}')
+
+    async def leave_guild(self, guild_id: int) -> None:
+        await self.request('DELETE', f'/guilds/{guild_id}/members/me')
 
     async def close(self) -> None:
         await self.session.close()

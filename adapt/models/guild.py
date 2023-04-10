@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast, NamedTuple, TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 
 from .asset import Asset
 from .bitflags import GuildFlags
@@ -10,6 +10,8 @@ from ..util import MISSING
 if TYPE_CHECKING:
     from typing import Self
 
+    from .member import Member, PartialMember
+    from .object import ObjectLike
     from ..connection import Connection
     from ..types.guild import PartialGuild as RawPartialGuild, Guild as RawGuild, Member as RawMember
     from ..util import IOSource
@@ -40,6 +42,26 @@ class PartialGuild(AdaptObject):
     def _update(self, data: dict) -> None:
         if id := data.get('id'):
             self._id = id
+
+    def get_partial_member(self, member_id: int) -> PartialMember:
+        """Creates a usable partial member object that operates with only its ID.
+
+        This is useful for when you want to perform actions on a member without having to ensure it is cached
+        or fetch unnecessary guild or member data.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The user ID to create the partial member with.
+
+        Returns
+        -------
+        :class:`.PartialMember`
+            The partial member object that was created.
+        """
+        from .member import PartialMember
+
+        return PartialMember(connection=self._connection, guild=self, member_id=member_id)
 
     async def _perform_edit(self, **kwargs) -> RawPartialGuild:
         return await self._connection.http.edit_guild(self.id, **kwargs)
@@ -91,11 +113,30 @@ class PartialGuild(AdaptObject):
         """
         await self._connection.http.delete_guild(self.id, password=password)
 
+    async def leave(self) -> None:
+        """|coro|
+
+        Leaves the guild.
+        """
+        await self._connection.http.leave_guild(self.id)
+
+    async def kick(self, member: ObjectLike) -> None:
+        """|coro|
+
+        Kicks the member from the guild. You must have the :attr:`.Permissions.kick_members` permission to do this.
+
+        Parameters
+        ----------
+        member: :class:`.Member`-like
+            The member to kick.
+        """
+        await self._connection.http.kick_member(self.id, member.id)
+
     def __repr__(self) -> str:
         return f'<PartialGuild id={self.id}>'
 
 
-class _GuildIntegrity:
+class _GuildCacheIntegrity:
     __slots__ = ('_members', '_roles', '_channels')
 
     def __init__(self) -> None:
@@ -153,7 +194,7 @@ class Guild(PartialGuild):
         self._members: dict[int, Member] = {}
         self._roles: dict[int, Role] = {}
         self._channels: dict[int, GuildChannel] = {}
-        self._integrity: _GuildIntegrity = _GuildIntegrity()
+        self._integrity = _GuildCacheIntegrity()
 
         super().__init__(connection=connection, id=data['id'])
         self._update(cast('RawGuild', data))
@@ -178,15 +219,56 @@ class Guild(PartialGuild):
         return member
 
     def _add_raw_member(self, data: RawMember) -> Member:
+        from .member import Member
+
         if member := self._members.get(data['id']):
             member._update(data)
             return member
 
-        member = ...  # TODO
+        member = Member(guild=self, data=data)
+        self._connection.add_raw_user(data)
         return self._add_member(member)
 
+    def get_member(self, member_id: int) -> Member | None:
+        """Returns the member with the given ID, resolved from the cache.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The ID of the member to get.
+
+        Returns
+        -------
+        :class:`.Member` | None
+            The member with the given ID, or ``None`` if not found in the cache.
+        """
+        return self._members.get(member_id)
+
+    async def fetch_member(self, member_id: int, *, respect_cache: bool = True) -> Member:
+        """|coro|
+
+        Fetches the member with the given ID from the API.
+
+        Parameters
+        ----------
+        member_id: :class:`int`
+            The ID of the member to fetch.
+        respect_cache: :class:`bool`
+            Whether to respect the cache or not. If ``True``, the cache will be checked first.
+
+        Returns
+        -------
+        :class:`.Member`
+            The member with the given ID.
+        """
+        if member := respect_cache and self.get_member(member_id):
+            return member
+
+        data = await self._connection.http.get_member(self.id, member_id)
+        return self._add_raw_member(data)
+
     @property
-    def cache_integrity(self) -> _GuildIntegrity:
+    def cache_integrity(self) -> _GuildCacheIntegrity:
         """Returns the integrity of the guild's cache.
 
         This is a :class:`.NamedTuple` with the following boolean attributes:
@@ -196,6 +278,14 @@ class Guild(PartialGuild):
         - ``channels``: Whether the guild's channels are cached.
         """
         return self._integrity
+
+    @property
+    def me(self) -> Member | None:
+        """:class:`.Member`: The member that represents the client in the guild, if available in cache.
+
+        This is equivalent to ``guild.get_member(client.user.id)``.
+        """
+        return self.get_member(self._connection.user.id)
 
     @property
     def icon(self) -> Asset:
@@ -225,7 +315,7 @@ class Guild(PartialGuild):
     @property
     def owner(self) -> Member | None:
         """:class:`.Member` | None: The resolved member object of the guild owner, if available in cache."""
-        return self._members.get(self.owner_id)
+        return self.get_member(self.owner_id)
 
     async def edit(
         self,
