@@ -82,10 +82,61 @@ PartialGuild
     :members:
     :inherited-members:
 
+Member
+~~~~~~
+
+.. autoclass:: adapt.Member()
+    :members:
+    :inherited-members:
+
+PartialMember
+~~~~~~~~~~~~~
+
+.. autoclass:: adapt.PartialMember()
+    :members:
+    :inherited-members:
+
+PartialMessageable
+~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: adapt.PartialMessageable()
+    :members:
+    :inherited-members:
+
+GuildChannel
+~~~~~~~~~~~~
+
+.. autoclass:: adapt.GuildChannel()
+    :members:
+    :inherited-members:
+
+DMChannel
+~~~~~~~~~
+
+.. autoclass:: adapt.DMChannel()
+    :members:
+    :inherited-members:
+
 Asset
 ~~~~~
 
 .. autoclass:: adapt.Asset()
+    :members:
+    :inherited-members:
+
+Base Classes
+------------
+
+Messageable
+~~~~~~~~~~~
+
+.. autoclass:: adapt.Messageable()
+    :members:
+
+PrivateChannel
+~~~~~~~~~~~~~~
+
+.. autoclass:: adapt.PrivateChannel()
     :members:
     :inherited-members:
 
