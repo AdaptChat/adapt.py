@@ -11,6 +11,7 @@ __all__ = (
     'Status',
     'RelationshipType',
     'ChannelType',
+    'MessageType',
 )
 
 
