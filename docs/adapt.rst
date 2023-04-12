@@ -103,10 +103,17 @@ PartialMessageable
     :members:
     :inherited-members:
 
-GuildChannel
-~~~~~~~~~~~~
+TextChannel
+~~~~~~~~~~~
 
-.. autoclass:: adapt.GuildChannel()
+.. autoclass:: adapt.TextChannel()
+    :members:
+    :inherited-members:
+
+AnnouncementChannel
+~~~~~~~~~~~~~~~~~~~
+
+.. autoclass:: adapt.AnnouncementChannel()
     :members:
     :inherited-members:
 
@@ -114,6 +121,20 @@ DMChannel
 ~~~~~~~~~
 
 .. autoclass:: adapt.DMChannel()
+    :members:
+    :inherited-members:
+
+Message
+~~~~~~~
+
+.. autoclass:: adapt.Message()
+    :members:
+    :inherited-members:
+
+PartialMessage
+~~~~~~~~~~~~~~
+
+.. autoclass:: adapt.PartialMessage
     :members:
     :inherited-members:
 
@@ -132,6 +153,13 @@ Messageable
 
 .. autoclass:: adapt.Messageable()
     :members:
+
+GuildChannel
+~~~~~~~~~~~~
+
+.. autoclass:: adapt.GuildChannel()
+    :members:
+    :inherited-members:
 
 PrivateChannel
 ~~~~~~~~~~~~~~
@@ -156,6 +184,9 @@ Standard Enums
     :members:
 
 .. autoclass:: adapt.ChannelType()
+    :members:
+
+.. autoclass:: adapt.MessageType()
     :members:
 
 Bitflag Enums

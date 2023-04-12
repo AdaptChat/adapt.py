@@ -19,6 +19,7 @@ from .websocket import WebSocket
 if TYPE_CHECKING:
     from typing import Any, Generator, Iterable, Self, ValuesView, TypeAlias
 
+    from .models.message import Message
     from .models.ready import ReadyEvent
     from .models.guild import Guild
     from .models.user import ClientUser, Relationship, User
@@ -152,6 +153,28 @@ class EventDispatcher:
             ----------
             ready: :class:`.ReadyEvent`
                 Data received with the ready event.
+            """
+
+        async def on_guild_create(self, guild: Guild) -> None:
+            """|coro|
+
+            Called when a guild is created.
+
+            Parameters
+            ----------
+            guild: :class:`.Guild`
+                The guild that was created.
+            """
+
+        async def on_message(self, message: Message) -> None:
+            """|coro|
+
+            Called when a message is created.
+
+            Parameters
+            ----------
+            message: :class:`.Message`
+                The message that was created.
             """
 
     def __init__(self) -> None:

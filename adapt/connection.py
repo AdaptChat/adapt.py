@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from .models.channel import DMChannel
 from .models.enums import RelationshipType, Status
 from .models.guild import Guild
+from .models.message import Message
 from .models.ready import ReadyEvent
 from .models.user import ClientUser, Relationship, User
 from .server import AdaptServer
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
         UserUpdateEvent,
         GuildCreateEvent,
         GuildUpdateEvent,
+        MessageCreateEvent,
     )
     from .websocket import Dispatcher
 
@@ -175,3 +177,14 @@ class Connection:
             guild._update(data['after'])
 
         self.dispatch('guild_update', before, guild)
+
+    def _handle_message_create(self, data: MessageCreateEvent) -> None:
+        message = data['message']
+        if guild_id := message['author']['guild_id']:
+            guild = self.get_guild(guild_id)
+            channel = guild.get_channel(message['channel_id'])
+        else:
+            channel = self.get_dm_channel(message['channel_id'])
+
+        message = Message(channel=channel, data=message)
+        self.dispatch('message', message)  # TODO: dispatch nonce

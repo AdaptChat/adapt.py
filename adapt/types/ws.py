@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Generic, Literal, TypedDict, TypeAlias, TypeVar
+from typing import Generic, Literal, TypedDict, TypeAlias, TypeVar
 
 from . import Snowflake
 from .channel import Channel, DMChannel
 from .guild import Guild, Member, PartialGuild
+from .message import Message
 from .presence import Presence
 from .role import Role
 from .user import ClientUser, User, Relationship
@@ -25,6 +26,7 @@ __all__ = (
     'GuildCreateEvent',
     'MemberRemoveType',
     'GuildRemoveEvent',
+    'MessageCreateEvent',
     'InboundMessage',
 )
 
@@ -83,10 +85,23 @@ class GuildRemoveEvent(_MemberRemoveInfo):
     guild_id: Snowflake
 
 
+class MessageCreateEvent(TypedDict):
+    message: Message
+    nonce: str | None
+
+
 # harmony -> adapt.py, this is modeled as **OutboundMessage** in essence!
 InboundMessage: TypeAlias = (
     _InboundEvent[Literal['hello', 'ping', 'pong']]
     | _InboundEventWithData[Literal['ready'], ReadyEvent]
     | _InboundEventWithData[Literal['user_update'], UserUpdateEvent]
     | _InboundEventWithData[Literal['user_delete'], UserDeleteEvent]
+    | _InboundEventWithData[Literal['channel_update'], ChannelUpdateEvent]
+    | _InboundEventWithData[Literal['role_update'], RoleUpdateEvent]
+    | _InboundEventWithData[Literal['member_update'], MemberUpdateEvent]
+    | _InboundEventWithData[Literal['presence_update'], PresenceUpdateEvent]
+    | _InboundEventWithData[Literal['guild_create'], GuildCreateEvent]
+    | _InboundEventWithData[Literal['guild_update'], GuildUpdateEvent]
+    | _InboundEventWithData[Literal['guild_remove'], GuildRemoveEvent]
+    | _InboundEventWithData[Literal['message_create'], MessageCreateEvent]
 )

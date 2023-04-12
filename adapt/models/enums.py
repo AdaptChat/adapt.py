@@ -142,3 +142,21 @@ class ChannelType(Enum):
     @property
     def is_voice_based(self) -> bool:
         return self is self.voice
+
+
+class MessageType(Enum):
+    """|enum|
+
+    default
+        A normal message.
+    join
+        A join message, sent when a user joins either a group DM or a guild.
+    leave
+        A leave message, sent when a user leaves either a group DM or a guild.
+    pin
+        A message that indicates another message has been pinned.
+    """
+    default = 'default'
+    join = 'join'
+    leave = 'leave'
+    pin = 'pin'

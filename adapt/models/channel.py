@@ -4,10 +4,12 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from .enums import ChannelType
+from .message import Message
 from .object import AdaptObject
-from ..util import MISSING
 
 if TYPE_CHECKING:
+    from typing import Self, TypeAlias
+
     from .guild import Guild
     from .user import User
     from ..connection import Connection
@@ -17,6 +19,8 @@ __all__ = (
     'Messageable',
     'PartialMessageable',
     'GuildChannel',
+    'TextChannel',
+    'AnnouncementChannel',
     'PrivateChannel',
     'DMChannel',
 )
@@ -30,7 +34,7 @@ class Messageable(ABC):
     _connection: Connection
 
     @abstractmethod
-    async def _get_channel_id(self) -> int:
+    async def _get_channel(self) -> MessageableChannel:
         raise NotImplementedError
 
     async def fetch_message(self, message_id: int) -> Message:
@@ -48,8 +52,8 @@ class Messageable(ABC):
         :class:`.Message`
             The message that was fetched.
         """
-        channel_id = await self._get_channel_id()
-        return await self._connection.http.get_message(channel_id, message_id)
+        channel = await self._get_channel()
+        return Message(channel=channel, data=await self._connection.http.get_message(channel.id, message_id))
 
     async def send(self, content: str | None = None, *, nonce: str | None = None) -> Message:
         """|coro|
@@ -62,19 +66,22 @@ class Messageable(ABC):
             The content of the message to send.
         nonce: :class:`str`
             An optional nonce for integrity. When this message is received through the websocket, the nonce will be
-            included in the message payload. This can be used to verify that the essage was sent successfully.
+            included in the message payload. This can be used to verify that the message was sent successfully.
 
         Returns
         -------
         :class:`.Message`
             The message that was sent.
         """
-        channel_id = await self._get_channel_id()
-        return await self._connection.http.create_message(channel_id, content=content, nonce=nonce)
+        channel = await self._get_channel()
+        return Message(
+            channel=channel,
+            data=await self._connection.http.create_message(channel.id, content=content, nonce=nonce),
+        )
 
 
 class PartialMessageable(Messageable):
-    """Represents a channel that can be a medium for text-based communication that operates with only its channel ID.
+    """Represents a channel tha t can be a medium for text-based communication that operates with only its channel ID.
 
     This is useful for performing messaging operations on channels without having to fetch them first or guarantee
     that they are cached.
@@ -91,8 +98,8 @@ class PartialMessageable(Messageable):
         self._connection = connection
         self.channel_id = channel_id
 
-    async def _get_channel_id(self) -> int:
-        return self.channel_id
+    async def _get_channel(self) -> Self:
+        return self
 
 
 class GuildChannel(AdaptObject, ABC):
@@ -107,8 +114,8 @@ class GuildChannel(AdaptObject, ABC):
     ----------
     type: :class:`.ChannelType`
         The type of the channel. :attr:`.ChannelType.is_guild` for this value will always be ``True``.
-    guild_id: :class:`int`
-        The ID of the guild that the channel belongs to.
+    guild: :class:`.Guild`
+        The guild that the channel belongs to.
     parent_id: :class:`int` | None
         The ID of the parent category that the channel belongs to, if any.
     name: :class:`str`
@@ -122,7 +129,7 @@ class GuildChannel(AdaptObject, ABC):
     # TODO: channel overwrites and permission checks
     __slots__ = (
         'type',
-        'guild_id',
+        'guild',
         'parent_id',
         'name',
         'position',
@@ -132,7 +139,7 @@ class GuildChannel(AdaptObject, ABC):
 
     if TYPE_CHECKING:
         type: ChannelType
-        guild_id: int
+        guild: Guild
         parent_id: int | None
         name: str
         position: int
@@ -140,19 +147,9 @@ class GuildChannel(AdaptObject, ABC):
     def _update(self, data: RawGuildChannel) -> None:
         self._id = data['id']
         self.type = ChannelType(data['type'])
-        self.guild_id = data['guild_id']
         self.parent_id = data['parent_id']
         self.name = data['name']
         self.position = data['position']
-
-    @property
-    def guild(self) -> Guild | None:
-        """:class:`.Guild` | None: The guild that the channel belongs to.
-
-        This is a shortcut for calling :meth:`.Client.get_guild` with :attr:`~.GuildChannel.guild_id`. If the guild is
-        not cached, this will return ``None``.
-        """
-        return self._connection.get_guild(self.guild_id)
 
     async def delete(self) -> None:
         """|coro|
@@ -160,6 +157,102 @@ class GuildChannel(AdaptObject, ABC):
         Deletes the channel. You must have the :attr:`~.Permissions.manage_channels` permission to do this.
         """
         await self._connection.http.delete_channel(self.id)
+
+
+class TextChannel(GuildChannel, Messageable):
+    """Represents a text-based guild channel in Adapt.
+
+    Attributes
+    ----------
+    topic: :class:`str` | None
+        The topic of the channel, if any.
+    nsfw: :class:`bool`
+        Whether the channel is NSFW.
+    locked: :class:`bool`
+        Whether the channel is locked. Only people with the :attr:`~.Permissions.manage_channels` permission can send
+        messages in locked channels.
+    """
+
+    __slots__ = ('_connection', 'topic', 'nsfw', 'locked', '_slowmode')
+
+    if TYPE_CHECKING:
+        _connection: Connection
+        topic: str | None
+        nsfw: bool
+        locked: bool
+        _slowmode: int
+
+    def __init__(self, *, guild: Guild, data: RawGuildChannel) -> None:
+        self._connection = guild._connection
+        self.guild = guild
+        self._update(data)
+
+    def _update(self, data: RawGuildChannel) -> None:
+        super()._update(data)
+        self.topic = data['topic']
+        self.nsfw = data['nsfw']
+        self.locked = data['locked']
+        self._slowmode = data['slowmode']
+
+    @property
+    def slowmode(self) -> float:
+        """:class:`float`: The slowmode of the channel, in seconds. This is ``0.0`` if the channel has no slowmode."""
+        return self._slowmode / 1000.0
+
+    @property
+    def slowmode_ms(self) -> int:
+        """:class:`int`: The slowmode of the channel, in milliseconds. This is ``0`` if the channel has no slowmode."""
+        return self._slowmode
+
+    @property
+    def is_nsfw(self) -> bool:
+        """:class:`bool`: Whether the channel is NSFW.
+
+        This is an alias for :attr:`~.TextBasedGuildChannel.nsfw`. and is provided for consistency.
+        """
+        return self.nsfw
+
+    @property
+    def is_locked(self) -> bool:
+        """:class:`bool`: Whether the channel is locked.
+
+        This is an alias for :attr:`~.TextBasedGuildChannel.locked`. and is provided for consistency.
+        """
+        return self.locked
+
+    @property
+    def mention(self) -> str:
+        """:class:`str`: A string that allows you to mention the channel."""
+        return f'<#{self.id}>'
+
+    async def _get_channel(self) -> Self:
+        return self
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return f'<{self.__class__.__name__} id={self.id} name={self.name!r}>'
+
+
+class AnnouncementChannel(TextChannel):
+    """Represents an announcement channel in a guild in Adapt."""
+
+    __slots__ = ()
+
+
+def _guild_channel_factory(*, guild: Guild, data: RawGuildChannel) -> GuildChannel:
+    channel_type = ChannelType(data['type'])
+
+    if channel_type is ChannelType.text:
+        factory = TextChannel
+    elif channel_type is ChannelType.announcement:
+        factory = AnnouncementChannel
+    else:
+        # TODO
+        factory = GuildChannel
+
+    return factory(guild=guild, data=data)
 
 
 class PrivateChannel(AdaptObject, ABC):
@@ -252,8 +345,12 @@ class DMChannel(PrivateChannel, Messageable):
         """
         return self._connection.get_user(self.recipient_id)
 
-    async def _get_channel_id(self) -> int:
-        return self.id
+    async def _get_channel(self) -> Self:
+        return self
 
     def __repr__(self) -> str:
         return f'<DMChannel id={self.id} recipient_id={self.recipient_id}>'
+
+
+if TYPE_CHECKING:
+    MessageableChannel: TypeAlias = TextChannel | PrivateChannel | PartialMessageable

@@ -268,11 +268,12 @@ class HTTPClient:
         channel_id: int,
         message_id: int,
         *,
-        content: str | None = None,
+        content: str | None = MISSING,
     ) -> Message:
-        payload: EditMessagePayload = {
-            'content': content,
-        }
+        payload: EditMessagePayload = {}
+        if content is not MISSING:
+            payload['content'] = content
+
         return await self.request('PATCH', f'/channels/{channel_id}/messages/{message_id}', json=payload)
 
     async def delete_message(self, channel_id: int, message_id: int) -> None:

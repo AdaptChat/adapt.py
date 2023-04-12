@@ -43,7 +43,7 @@ class PartialMemberMixin:
 class PartialMember(PartialUser, PartialMemberMixin):
     """Represents a partial member of a guild.
 
-    This is the base class for all types of partial members, and should not be used directly.
+    This is useful for performing operations on members without having to fetch them first.
 
     Attributes
     ----------
@@ -56,8 +56,8 @@ class PartialMember(PartialUser, PartialMemberMixin):
     if TYPE_CHECKING:
         guild: PartialGuild
 
-    def __init__(self, *, connection: Connection, guild: PartialGuild, id: int) -> None:
-        super().__init__(connection=connection, id=id)
+    def __init__(self, *, guild: PartialGuild, id: int) -> None:
+        super().__init__(connection=guild._connection, id=id)
         self.guild = guild
 
     def __repr__(self) -> str:

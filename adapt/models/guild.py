@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-from typing import cast, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from .asset import Asset
 from .bitflags import GuildFlags
+from .channel import TextChannel, _guild_channel_factory
 from .object import AdaptObject
 from ..util import MISSING
 
 if TYPE_CHECKING:
-    from typing import Self
+    from typing import Generator, ValuesView, Self
 
+    from .channel import GuildChannel
     from .member import Member, PartialMember
     from .object import ObjectLike
     from ..connection import Connection
+    from ..types.channel import GuildChannel as RawGuildChannel
     from ..types.guild import PartialGuild as RawPartialGuild, Guild as RawGuild, Member as RawMember
     from ..util import IOSource
 
@@ -61,7 +64,7 @@ class PartialGuild(AdaptObject):
         """
         from .member import PartialMember
 
-        return PartialMember(connection=self._connection, guild=self, id=member_id)
+        return PartialMember(guild=self, id=member_id)
 
     async def _perform_edit(self, **kwargs) -> RawPartialGuild:
         return await self._connection.http.edit_guild(self.id, **kwargs)
@@ -197,9 +200,9 @@ class Guild(PartialGuild):
         self._integrity = _GuildCacheIntegrity()
 
         super().__init__(connection=connection, id=data['id'])
-        self._update(cast('RawGuild', data))
+        self._update(data)
 
-    def _update(self, data: RawGuild) -> None:
+    def _update(self, data: RawPartialGuild | RawGuild) -> None:
         super()._update(data)
         self.name = data['name']
         self.description = data['description']
@@ -213,6 +216,11 @@ class Guild(PartialGuild):
             for member in members:
                 self._add_raw_member(member)
             self._integrity._members = True
+
+        if channels := data.get('channels'):
+            for channel in channels:
+                self._add_raw_channel(channel)
+            self._integrity._channels = True
 
     def _add_member(self, member: Member) -> Member:
         self._members[member.id] = member
@@ -228,6 +236,23 @@ class Guild(PartialGuild):
         member = Member(guild=self, data=data)
         self._connection.add_raw_user(data)
         return self._add_member(member)
+
+    def _add_channel(self, channel: GuildChannel) -> GuildChannel:
+        self._channels[channel.id] = channel
+        return channel
+
+    def _add_raw_channel(self, data: RawGuildChannel) -> GuildChannel:
+        if channel := self._channels.get(data['id']):
+            channel._update(data)
+            return channel
+
+        channel = _guild_channel_factory(guild=self, data=data)
+        return self._add_channel(channel)
+
+    @property
+    def members(self) -> ValuesView[Member]:
+        """Iterable[:class:`.Member`]: An iterable of the guild's members."""
+        return self._members.values()
 
     def get_member(self, member_id: int) -> Member | None:
         """Returns the member with the given ID, resolved from the cache.
@@ -266,6 +291,54 @@ class Guild(PartialGuild):
 
         data = await self._connection.http.get_member(self.id, member_id)
         return self._add_raw_member(data)
+
+    @property
+    def channels(self) -> ValuesView[GuildChannel]:
+        """Iterable[:class:`.GuildChannel`]: An iterable of the guild's channels."""
+        return self._channels.values()
+
+    @property
+    def text_channels(self) -> Generator[TextChannel, None, None]:
+        """Iteratable[:class:`.TextBasedGuildChannel`]: An iterator of the guild's text-based channels."""
+        return (channel for channel in self.channels if isinstance(channel, TextChannel))
+
+    def get_channel(self, channel_id: int) -> GuildChannel | None:
+        """Returns the channel with the given ID, resolved from the cache.
+
+        Parameters
+        ----------
+        channel_id: :class:`int`
+            The ID of the channel to get.
+
+        Returns
+        -------
+        :class:`.GuildChannel` | None
+            The channel with the given ID, or ``None`` if not found in the cache.
+        """
+        return self._channels.get(channel_id)
+
+    async def fetch_channel(self, channel_id: int, *, respect_cache: bool = True) -> GuildChannel:
+        """|coro|
+
+        Fetches the channel with the given ID from the API.
+
+        Parameters
+        ----------
+        channel_id: :class:`int`
+            The ID of the channel to fetch.
+        respect_cache: :class:`bool`
+            Whether to respect the cache or not. If ``True``, the cache will be checked first.
+
+        Returns
+        -------
+        :class:`.GuildChannel`
+            The channel with the given ID.
+        """
+        if channel := respect_cache and self.get_channel(channel_id):
+            return channel
+
+        data = await self._connection.http.get_channel(channel_id)
+        return self._add_raw_channel(data)
 
     @property
     def cache_integrity(self) -> _GuildCacheIntegrity:
@@ -348,9 +421,9 @@ class Guild(PartialGuild):
         :class:`.Guild`
             The updated guild object.
         """
-        self._update(cast('RawGuild', await self._perform_edit(
+        self._update(await self._perform_edit(
             name=name, description=description, icon=icon, banner=banner, public=public,
-        )))
+        ))
         return self
 
     def __str__(self) -> str:

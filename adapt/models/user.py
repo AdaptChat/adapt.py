@@ -225,12 +225,12 @@ class PartialUser(AdaptObject, Messageable):
     This is useful for performing operations on users without having to fetch them first.
     """
 
-    __slots__ = ('_connection', '_dm_channel_id')
+    __slots__ = ('_connection', '_dm_channel')
 
     def __init__(self, *, connection: Connection, id: int) -> None:
         self._id = id
         self._connection = connection
-        self._dm_channel_id: int | None = None
+        self._dm_channel: DMChannel | None = None
 
     def _update(self, data: dict) -> None:
         if id := data.get('id'):
@@ -239,14 +239,14 @@ class PartialUser(AdaptObject, Messageable):
     @property
     def dm_channel(self) -> DMChannel | None:
         """:class:`.DMChannel`: The DM channel with this user, if it exists in the cache."""
-        if self._dm_channel_id:
-            return self._connection.get_dm_channel(self._dm_channel_id)
+        if channel := self._dm_channel:
+            return channel
 
         if found := find(
             self._connection._dm_channels.values(),
             lambda dm: dm.type is ChannelType.dm and dm.recipient == self,
         ):
-            self._dm_channel_id = found.id
+            self._dm_channel = found
             return found
 
     async def create_dm(self) -> DMChannel:
@@ -260,14 +260,13 @@ class PartialUser(AdaptObject, Messageable):
             The DM channel created.
         """
         channel = await self._connection.http.create_user_dm_channel(self.id)
-        resolved = self._connection.add_raw_dm_channel(channel)
-        self._dm_channel_id = resolved.id
+        self._dm_channel = resolved = self._connection.add_raw_dm_channel(channel)
         return resolved
 
-    async def _get_channel_id(self) -> int:
+    async def _get_channel(self) -> DMChannel:
         if self.dm_channel is None:
             await self.create_dm()
-        return self._dm_channel_id
+        return self.dm_channel
 
     @property
     def relationship(self) -> Relationship | None:

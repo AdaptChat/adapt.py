@@ -107,7 +107,7 @@ class Bitflags:
     value: int
 
     __valid_flags__: ClassVar[dict[str, int]]
-    __default_value__: ClassVar[int]
+    __default_value__: ClassVar[int] = 0
     __all_value__: ClassVar[int]
 
     __slots__ = ('value',)
