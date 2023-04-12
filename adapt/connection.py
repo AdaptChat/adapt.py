@@ -180,7 +180,7 @@ class Connection:
 
     def _handle_message_create(self, data: MessageCreateEvent) -> None:
         message = data['message']
-        if guild_id := message['author']['guild_id']:
+        if guild_id := message['author'].get('guild_id'):
             guild = self.get_guild(guild_id)
             channel = guild.get_channel(message['channel_id'])
         else:
