@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import aiohttp
 import asyncio
+from urllib.parse import quote
 
 from typing import Literal, TYPE_CHECKING
 
@@ -133,9 +134,20 @@ class HTTPClient:
 
     # Users
 
-    async def create_user(self, *, username: str, email: str, password: str) -> CreateUserResponse:
+    async def check_username(self, username: str) -> bool:
+        return await self.request('GET', f'/users/check/{quote(username)}')
+
+    async def create_user(
+        self,
+        *,
+        username: str,
+        display_name: str | None = None,
+        email: str,
+        password: str,
+    ) -> CreateUserResponse:
         payload: CreateUserPayload = {
             'username': username,
+            'display_name': display_name,
             'email': email,
             'password': password,
         }
@@ -154,11 +166,14 @@ class HTTPClient:
         self,
         *,
         username: str = MISSING,
+        display_name: str | None = MISSING,
         avatar: IOSource | None = MISSING,
         banner: IOSource | None = MISSING,
         bio: str | None = MISSING,
     ) -> ClientUser:
         payload: EditUserPayload = {'username': username}
+        if display_name is not MISSING:
+            payload['display_name'] = display_name
         if avatar is not MISSING:
             payload['avatar'] = resolve_image(avatar)
         if banner is not MISSING:
@@ -174,11 +189,8 @@ class HTTPClient:
     async def get_relationships(self) -> list[Relationship]:
         return await self.request('GET', '/relationships')
 
-    async def send_friend_request(self, *, username: str, discriminator: int) -> Relationship:
-        payload: SendFriendRequestPayload = {
-            'username': username,
-            'discriminator': discriminator,
-        }
+    async def send_friend_request(self, *, username: str) -> Relationship:
+        payload: SendFriendRequestPayload = {'username': username}
         return await self.request('POST', '/relationships/friends', json=payload)
 
     async def accept_friend_request(self, user_id: int) -> Relationship:

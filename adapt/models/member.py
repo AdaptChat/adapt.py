@@ -102,12 +102,12 @@ class Member(User, PartialMemberMixin):
         return self._connection.get_user(self.id) or self
 
     @property
-    def display_name(self) -> str:
+    def resolved_name(self) -> str:
         """:class:`str`: The member's display name.
 
-        This is their nickname if they have one, otherwise it is their username.
+        This is their nickname if they have one, otherwise it is their :attr:`display_name`.
         """
-        return self.nick or self.username
+        return self.nick or self.display_name
 
     def __repr__(self) -> str:
         return f'<{self.__class__.__name__} id={self.id} guild_id={self.guild.id}>'

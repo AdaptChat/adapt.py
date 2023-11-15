@@ -25,7 +25,7 @@ class BaseUser:
     if TYPE_CHECKING:
         _connection: Connection
         username: str
-        discriminator: int
+        display_name: str | None
         _avatar: str | None
         _banner: str | None
         bio: str | None
@@ -33,7 +33,7 @@ class BaseUser:
 
     def _update(self, data: RawUser) -> None:
         self.username = data['username']
-        self.discriminator = data['discriminator']
+        self._display_name = data['display_name']
         self._avatar = data['avatar']
         self._banner = data['banner']
         self.bio = data['bio']
@@ -58,28 +58,31 @@ class BaseUser:
         return self.username
 
     @property
-    def padded_discriminator(self) -> str:
-        """:class:`str`: The user's discriminator with leading zeros."""
-        return f'{self.discriminator:0>4}'
-
-    @property
-    def tag(self) -> str:
-        """:class:`str`: The user's tag. (``username#discriminator``)"""
-        return f'{self.username}#{self.padded_discriminator}'
-
-    @property
     def mention(self) -> str:
         """:class:`str`: The string used to mention the user. (``<@id>``)"""
         return f'<@{self.id}>'
 
     @property
-    def display_name(self) -> str:
-        """:class:`str`: The name displayed to refer to the user.
+    def has_display_name(self) -> str:
+        """:class:`bool`: Whether the user explicitly has a display name configured."""
+        return self._display_name is not None
 
-        This is the same as :attr:`username` for users. For members, this is overridden to return the member's nickname
-        (or username if the member has no nickname).
+    @property
+    def display_name(self) -> str:
+        """:class:`str`: The name displayed to refer to the user globally.
+
+        This falls back to :attr:`username` if the user has no display name.
         """
-        return self.username
+        return self._display_name or self.username
+
+    @property
+    def resolved_name(self) -> str:
+        """:class:`str`: The resolved name for the user, displayed in clients to refer to the user.
+
+        - For users, this is the same as :attr:`display_name`.
+        - For members, this returns the user's nickname with a fallback to :attr:`display_name`.
+        """
+        return self.display_name
 
     @property
     def avatar(self) -> Asset:
@@ -102,23 +105,22 @@ class BaseUser:
         return self.flags.bot
 
     def __str__(self) -> str:
-        return self.tag
+        return self.username
 
     def __repr__(self) -> str:
-        return (
-            f'<{self.__class__.__name__} id={self.id!r} username={self.username!r} '
-            f'discriminator={self.discriminator!r}>'
-        )
+        return f'<{self.__class__.__name__} id={self.id!r} username={self.username!r}>'
 
     def __format__(self, format_spec: str) -> str:
-        if format_spec == 'd':
+        if format_spec == 'r':
+            return self.resolved_name
+        elif format_spec == 'd':
             return self.display_name
         elif format_spec == 'u':
             return self.username
         elif format_spec == '@':
             return self.mention
 
-        return self.tag.__format__(format_spec)
+        return self.username.__format__(format_spec)
 
 
 class ClientUser(BaseUser, AdaptObject):
@@ -128,8 +130,6 @@ class ClientUser(BaseUser, AdaptObject):
     ----------
     username: :class:`str`
         The user's username.
-    discriminator: :class:`int`
-        The user's discriminator.
     bio: :class:`str`
         The user's custom bio.
     email: :class:`str`
@@ -139,7 +139,7 @@ class ClientUser(BaseUser, AdaptObject):
     __slots__ = (
         '_connection',
         'username',
-        'discriminator',
+        '_display_name',
         '_avatar',
         '_banner',
         'bio',
@@ -163,6 +163,7 @@ class ClientUser(BaseUser, AdaptObject):
         self,
         *,
         username: str = MISSING,
+        display_name: str | None = MISSING,
         avatar: IOSource | None = MISSING,
         banner: IOSource | None = MISSING,
         bio: IOSource | None = MISSING,
@@ -175,6 +176,8 @@ class ClientUser(BaseUser, AdaptObject):
         ----------
         username: :class:`str`
             The new username to use.
+        display_name: :class:`str` or ``None``
+            The new display name to use. If ``None``, the display name will be removed.
         avatar: :class:`bytes`, path-like object, file-like object, or ``None``
             The new avatar to use. If ``None``, the avatar will be removed.
         banner: :class:`bytes`, path-like object, file-like object, or ``None``
@@ -189,6 +192,7 @@ class ClientUser(BaseUser, AdaptObject):
         """
         self._update(await self._connection.http.edit_authenticated_user(
             username=username,
+            display_name=display_name,
             avatar=avatar,
             banner=banner,
             bio=bio,
@@ -372,15 +376,13 @@ class User(BaseUser, PartialUser):
     ----------
     username: :class:`str`
         The user's username.
-    discriminator: :class:`int`
-        The user's discriminator.
     bio: :class:`str`
         The user's custom bio.
     """
 
     __slots__ = (
         'username',
-        'discriminator',
+        '_display_name',
         '_avatar',
         '_banner',
         'bio',
@@ -404,10 +406,7 @@ class User(BaseUser, PartialUser):
         :class:`.Relationship`
             The relationship created from sending the friend request.
         """
-        relationship = await self._connection.http.send_friend_request(
-            username=self.username,
-            discriminator=self.discriminator,
-        )
+        relationship = await self._connection.http.send_friend_request(username=self.username)
         return self._connection.update_raw_relationship(relationship)
 
 

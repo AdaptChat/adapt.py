@@ -33,10 +33,14 @@ class LoginResponse(TypedDict):
     token: str
 
 
-class CreateUserPayload(TypedDict):
+class _CreateUserPayloadRequired(TypedDict):
     username: str
     email: str
     password: str
+
+
+class CreateUserPayload(_CreateUserPayloadRequired, total=False):
+    display_name: str | None
 
 
 class CreateUserResponse(TypedDict):
@@ -49,6 +53,7 @@ class _EditUserPayloadRequired(TypedDict):
 
 
 class EditUserPayload(_EditUserPayloadRequired, total=False):
+    display_name: str | None
     avatar: str | None
     banner: str | None
     bio: str | None
@@ -56,13 +61,12 @@ class EditUserPayload(_EditUserPayloadRequired, total=False):
 
 class SendFriendRequestPayload(TypedDict):
     username: str
-    discriminator: int
 
 
 class User(TypedDict):
     id: Snowflake
     username: str
-    discriminator: int
+    display_name: str | None
     avatar: str | None
     banner: str | None
     bio: str | None

@@ -781,6 +781,7 @@ class Client(EventDispatcher):
         cls,
         *,
         username: str,
+        display_name: str | None = None,
         email: str,
         password: str,
         server: AdaptServer = AdaptServer.production(),
@@ -809,6 +810,8 @@ class Client(EventDispatcher):
         ----------
         username: :class:`str`
             The username of the new account.
+        display_name: :class:`str` or ``None``
+            The display name of the new account. Defaults to ``None`` (i.e. no display name).
         email: :class:`str`
             The email of the new account.
         password: :class:`str`
@@ -826,7 +829,10 @@ class Client(EventDispatcher):
         """
         async def coro() -> Self:
             http = HTTPClient(**options, server_url=server.api)
-            await http.create_user(username=username, email=email, password=password)
+            await http.create_user(
+                username=username, display_name=display_name,
+                email=email, password=password,
+            )
             return cls.from_http(http, server=server)
 
         return _CoroutineWrapper(coro())
