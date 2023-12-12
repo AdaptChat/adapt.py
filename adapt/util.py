@@ -163,7 +163,9 @@ def extract_user_id_from_token(token: str, /) -> int:
     ValueError
         Received a malformed token.
     """
-    return int(urlsafe_b64decode(token.split('.', maxsplit=1)[0]))
+    chunk = token.split('.', maxsplit=1)[0]
+    chunk += '=' * (-len(chunk) % 4)  # it is usually never padded
+    return int(urlsafe_b64decode(chunk))
 
 
 def snowflake_time(snowflake: int, /) -> datetime:

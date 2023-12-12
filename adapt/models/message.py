@@ -39,7 +39,6 @@ class PartialMessage(AdaptObject):
 
     def _update(self, data: RawMessage) -> None:
         self._id = data['id']
-        self._revision_id = data['revision_id']
 
     @property
     def _connection(self) -> Connection:
