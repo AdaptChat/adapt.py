@@ -101,7 +101,7 @@ class Message(PartialMessage):
         self._update(data)
 
     def _update(self, data: RawMessage) -> None:
-        self.content = data['content']
+        self.content = data['content'] or ''
 
         if author := data['author']:
             # Try upgrading the author to a member if possible
