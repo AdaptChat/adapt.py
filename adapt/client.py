@@ -552,7 +552,7 @@ class Client(EventDispatcher):
         :class:`.PartialMessageable`
             The partial messageable object that was created.
         """
-        return PartialMessageable(connection=self._connection, channel_id=channel_id)
+        return PartialMessageable(connection=self._connection, id=channel_id)
 
     def get_guild(self, guild_id: int) -> Guild | None:
         """Retrieves a guild from the cache.

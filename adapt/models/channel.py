@@ -108,15 +108,15 @@ class PartialMessageable(Messageable):
 
     Attributes
     ----------
-    channel_id: :class:`int`
+    id: :class:`int`
         The ID of the channel.
     """
 
-    __slots__ = ('_connection', 'channel_id')
+    __slots__ = ('_connection', 'id')
 
-    def __init__(self, *, connection: Connection, channel_id: int) -> None:
+    def __init__(self, *, connection: Connection, id: int) -> None:
         self._connection = connection
-        self.channel_id = channel_id
+        self.id = id
 
     async def _get_channel(self) -> Self:
         return self
