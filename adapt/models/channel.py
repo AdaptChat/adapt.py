@@ -101,7 +101,7 @@ class Messageable(ABC):
 
 
 class PartialMessageable(Messageable):
-    """Represents a channel tha t can be a medium for text-based communication that operates with only its channel ID.
+    """Represents a channel that can be a medium for text-based communication that operates with only its channel ID.
 
     This is useful for performing messaging operations on channels without having to fetch them first or guarantee
     that they are cached.

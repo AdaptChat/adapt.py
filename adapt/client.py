@@ -8,6 +8,7 @@ import aiohttp
 
 from .connection import Connection
 from .http import HTTPClient
+from .models.channel import PartialMessageable
 from .models.enums import Status
 from .models.guild import PartialGuild
 from .models.user import PartialUser
@@ -534,6 +535,24 @@ class Client(EventDispatcher):
         """
         relationships = await self.http.get_relationships()
         return map(self._connection.update_raw_relationship, relationships)
+
+    def get_partial_messageable(self, channel_id: int) -> PartialMessageable:
+        """Creates a usable partial messageable object that operates with only its ID.
+
+        This is useful for performing messaging operations on channels without having to fetch them first or guarantee
+        that they are cached.
+
+        Parameters
+        ----------
+        channel_id: :class:`int`
+            The channel ID to create the partial messageable with. Messages will be sent to this channel.
+
+        Returns
+        -------
+        :class:`.PartialMessageable`
+            The partial messageable object that was created.
+        """
+        return PartialMessageable(connection=self._connection, channel_id=channel_id)
 
     def get_guild(self, guild_id: int) -> Guild | None:
         """Retrieves a guild from the cache.
