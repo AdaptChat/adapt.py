@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     )
     from .types.message import (
         Message,
+        Embed,
         CreateMessagePayload,
         EditMessagePayload,
         MessageHistoryQuery,
@@ -267,10 +268,12 @@ class HTTPClient:
         channel_id: int,
         *,
         content: str | None = None,
+        embeds: list[Embed] = MISSING,
         nonce: str | None = None,
     ) -> Message:
         payload: CreateMessagePayload = {
             'content': content,
+            'embeds': [] if embeds is MISSING else embeds,
             'nonce': nonce,
         }
         return await self.request('POST', f'/channels/{channel_id}/messages', json=payload)
@@ -281,10 +284,13 @@ class HTTPClient:
         message_id: int,
         *,
         content: str | None = MISSING,
+        embeds: list[Embed] = MISSING,
     ) -> Message:
         payload: EditMessagePayload = {}
         if content is not MISSING:
             payload['content'] = content
+        if embeds is not MISSING:
+            payload['embeds'] = embeds
 
         return await self.request('PATCH', f'/channels/{channel_id}/messages/{message_id}', json=payload)
 

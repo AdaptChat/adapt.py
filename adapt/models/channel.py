@@ -10,6 +10,7 @@ from .object import AdaptObject
 if TYPE_CHECKING:
     from typing import Self, TypeAlias
 
+    from .embed import Embed
     from .guild import Guild
     from .user import User
     from ..connection import Connection
@@ -55,7 +56,14 @@ class Messageable(ABC):
         channel = await self._get_channel()
         return Message(channel=channel, data=await self._connection.http.get_message(channel.id, message_id))
 
-    async def send(self, content: str | None = None, *, nonce: str | None = None) -> Message:
+    async def send(
+        self,
+        content: str | None = None,
+        embed: Embed | None = None,
+        embeds: list[Embed] | None = None,
+        *,
+        nonce: str | None = None,
+    ) -> Message:
         """|coro|
 
         Sends a message to the channel.
@@ -64,6 +72,10 @@ class Messageable(ABC):
         ----------
         content: :class:`str`
             The content of the message to send.
+        embed: :class:`.Embed`
+            The singular embed of the message to send. Must be mutually exclusive with the ``embeds`` parameter.
+        embeds: list[:class:`.Embed`]
+            The embeds of the message to send. Must be mutually exclusive with the ``embed`` parameter.
         nonce: :class:`str`
             An optional nonce for integrity. When this message is received through the websocket, the nonce will be
             included in the message payload. This can be used to verify that the message was sent successfully.
@@ -74,9 +86,17 @@ class Messageable(ABC):
             The message that was sent.
         """
         channel = await self._get_channel()
+
+        if embed is not None and embeds is not None:
+            raise TypeError('embed and embeds are mutually exclusive parameters')
+        if embed is not None:
+            embeds = [embed]
+        if embeds is not None:
+            embeds = [embed.to_dict() for embed in embeds]
+
         return Message(
             channel=channel,
-            data=await self._connection.http.create_message(channel.id, content=content, nonce=nonce),
+            data=await self._connection.http.create_message(channel.id, content=content, embeds=embeds, nonce=nonce),
         )
 
 

@@ -161,3 +161,38 @@ class MessageType(Enum):
     join = 'join'
     leave = 'leave'
     pin = 'pin'
+
+
+class EmbedType(Enum):
+    """|enum|
+
+    The type of a message embed.
+
+    Attributes
+    ----------
+    rich
+        A rich embed.
+    """
+    rich = 'rich'
+
+
+class EmbedFieldAlignment(Enum):
+    """|enum|
+
+    The alignment of an embed field.
+
+    Attributes
+    ----------
+    left
+        The field is aligned to the left.
+    center
+        The field is aligned to the center.
+    right
+        The field is aligned to the right.
+    inline
+        The field is displayed inline with the other fields. This is the default.
+    """
+    left = 'left'
+    center = 'center'
+    right = 'right'
+    inline = 'inline'

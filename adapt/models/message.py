@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .bitflags import MessageFlags
+from .embed import Embed
 from .enums import MessageType
 from .object import AdaptObject
 from ..util import MISSING
@@ -44,7 +45,13 @@ class PartialMessage(AdaptObject):
     def _connection(self) -> Connection:
         return self.channel._connection
 
-    async def edit(self, *, content: str | None = MISSING) -> Self:
+    async def edit(
+        self,
+        *,
+        content: str | None = MISSING,
+        embed: Embed | None = MISSING,
+        embeds: list[Embed] = MISSING,
+    ) -> Self:
         """|coro|
 
         Edits the message.
@@ -53,13 +60,26 @@ class PartialMessage(AdaptObject):
         ----------
         content: :class:`str`
             The new content of the message.
+        embed: :class:`.Embed` | None
+            The new singular embed of the message. This will replace all existing embeds. Must be mutually exclusive
+            with the ``embeds`` parameter. If ``None``, all embeds will be removed.
+        embeds: list[:class:`.Embed`]
+            The new embeds of the message. This will replace all existing embeds. Must be mutually exclusive with the
+            ``embed`` parameter. If an empty list is provided, all embeds will be removed.
 
         Returns
         -------
         :class:`.Message`
             The edited message.
         """
-        self._update(await self._connection.http.edit_message(self.channel.id, self.id, content=content))
+        if embed is not MISSING and embeds is not MISSING:
+            raise TypeError('embed and embeds are mutually exclusive parameters')
+        if embed is not MISSING:
+            embeds = [] if embed is None else [embed]
+        if embeds is not MISSING:
+            embeds = [embed.to_dict() for embed in embeds]
+
+        self._update(await self._connection.http.edit_message(self.channel.id, self.id, content=content, embeds=embeds))
         return self
 
     async def delete(self) -> None:
@@ -80,6 +100,8 @@ class Message(PartialMessage):
     ----------
     content: :class:`str`
         The content of the message. If no content exists, an empty string is returned.
+    embeds: list[:class:`.Embed`]
+        The embeds included in this message.
     type: :class:`.MessageType`
         The type of the message.
     flags: :class:`.MessageFlags`
@@ -90,6 +112,7 @@ class Message(PartialMessage):
 
     __slots__ = (
         'content',
+        'embeds',
         '_author',
         'type',
         'flags',
@@ -102,6 +125,7 @@ class Message(PartialMessage):
 
     def _update(self, data: RawMessage) -> None:
         self.content = data['content'] or ''
+        self.embeds = [Embed.from_dict(embed) for embed in data['embeds']]
 
         if author := data['author']:
             # Try upgrading the author to a member if possible
