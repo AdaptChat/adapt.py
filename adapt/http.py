@@ -268,14 +268,16 @@ class HTTPClient:
         channel_id: int,
         *,
         content: str | None = None,
-        embeds: list[Embed] = MISSING,
+        embeds: list[Embed] | None = None,
         nonce: str | None = None,
     ) -> Message:
         payload: CreateMessagePayload = {
             'content': content,
-            'embeds': [] if embeds is MISSING else embeds,
             'nonce': nonce,
         }
+        if embeds is not None:
+            payload['embeds'] = embeds
+
         return await self.request('POST', f'/channels/{channel_id}/messages', json=payload)
 
     async def edit_message(

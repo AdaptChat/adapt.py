@@ -148,6 +148,7 @@ class GuildChannel(AdaptObject, ABC):
 
     # TODO: channel overwrites and permission checks
     __slots__ = (
+        '_connection',
         'type',
         'guild',
         'parent_id',
@@ -163,6 +164,11 @@ class GuildChannel(AdaptObject, ABC):
         parent_id: int | None
         name: str
         position: int
+
+    def __init__(self, *, guild: Guild, data: RawGuildChannel) -> None:
+        self._connection = guild._connection
+        self.guild = guild
+        self._update(data)
 
     def _update(self, data: RawGuildChannel) -> None:
         self._id = data['id']
@@ -193,7 +199,7 @@ class TextChannel(GuildChannel, Messageable):
         messages in locked channels.
     """
 
-    __slots__ = ('_connection', 'topic', 'nsfw', 'locked', '_slowmode')
+    __slots__ = ('topic', 'nsfw', 'locked', '_slowmode')
 
     if TYPE_CHECKING:
         _connection: Connection
@@ -201,11 +207,6 @@ class TextChannel(GuildChannel, Messageable):
         nsfw: bool
         locked: bool
         _slowmode: int
-
-    def __init__(self, *, guild: Guild, data: RawGuildChannel) -> None:
-        self._connection = guild._connection
-        self.guild = guild
-        self._update(data)
 
     def _update(self, data: RawGuildChannel) -> None:
         super()._update(data)
@@ -261,6 +262,21 @@ class AnnouncementChannel(TextChannel):
     __slots__ = ()
 
 
+class VoiceChannel(GuildChannel):
+    """Represents a voice channel in Adapt."""
+
+    __slots__ = ()
+
+
+class CategoryChannel(GuildChannel):
+    """Represents a category in Adapt.
+
+    Categories share similar properties as channels, which is why categories are referred to as "category channels".
+    """
+
+    __slots__ = ()
+
+
 def _guild_channel_factory(*, guild: Guild, data: RawGuildChannel) -> GuildChannel:
     channel_type = ChannelType(data['type'])
 
@@ -268,9 +284,10 @@ def _guild_channel_factory(*, guild: Guild, data: RawGuildChannel) -> GuildChann
         factory = TextChannel
     elif channel_type is ChannelType.announcement:
         factory = AnnouncementChannel
-    else:
-        # TODO
-        factory = GuildChannel
+    elif channel_type is ChannelType.voice:
+        factory = VoiceChannel
+    elif channel_type is ChannelType.category:
+        factory = CategoryChannel
 
     return factory(guild=guild, data=data)
 
