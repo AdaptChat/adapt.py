@@ -89,7 +89,8 @@ class HeartbeatManager:
 
     def ack(self) -> None:
         self._last_heartbeat_ack = time.perf_counter_ns()
-        self.acked.set_result(True)
+        if not self.acked.done():
+            self.acked.set_result(True)
         self.acked = self.loop.create_future()
 
     async def stop(self) -> None:
