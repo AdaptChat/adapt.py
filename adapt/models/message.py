@@ -106,8 +106,6 @@ class Message(PartialMessage):
         The type of the message.
     flags: :class:`.MessageFlags`
         Special properties about the message.
-    stars: :class:`int`
-        The number of stars the message has accumulated.
     """
 
     __slots__ = (
@@ -116,7 +114,6 @@ class Message(PartialMessage):
         '_author',
         'type',
         'flags',
-        'stars',
     )
 
     def __init__(self, *, channel: MessageableChannel, data: RawMessage) -> None:
@@ -138,7 +135,6 @@ class Message(PartialMessage):
 
         self.type = MessageType(data['type'])
         self.flags = MessageFlags(data['flags'])
-        self.stars = data['stars']
 
         super()._update(data)
 
